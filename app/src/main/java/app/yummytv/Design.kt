@@ -1,5 +1,6 @@
 package app.yummytv
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -23,18 +24,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 // ---------- палитра ----------
 
@@ -49,6 +55,32 @@ val AccentBrush: Brush = Brush.horizontalGradient(listOf(Accent, Accent2))
 fun Modifier.appBackground(): Modifier = this.background(
     Brush.verticalGradient(listOf(Color(0xFF15122E), Bg))
 )
+
+/** Кому показывать постер на фоне: карточки сообщают сюда, какая из них в фокусе */
+val LocalBackdrop = staticCompositionLocalOf<(String?) -> Unit> { { _ -> } }
+
+/** Фон приложения повторяет постер карточки, на которой стоит фокус */
+@Composable
+fun Backdrop(state: State<String?>) {
+    val url = state.value
+    Crossfade(targetState = url, animationSpec = tween(600), label = "backdrop") { u ->
+        if (u != null) {
+            Box(Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = u,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().alpha(0.55f)
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color(0x730B0B1A), Color(0xE80B0B1A)))
+                    )
+                )
+            }
+        }
+    }
+}
 
 /** Стиль текста с градиентом (логотип) */
 fun brandStyle(size: Int): TextStyle =

@@ -10,6 +10,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -50,6 +54,15 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val guestFocus = remember { FocusRequester() }
+    // при открытии фокус сразу на «Продолжить без входа»
+    LaunchedEffect(Unit) {
+        delay(300)
+        try {
+            guestFocus.requestFocus()
+        } catch (e: Exception) {
+        }
+    }
 
     fun doLogin() {
         if (busy || login.isBlank() || pass.isBlank()) return
@@ -142,6 +155,6 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
         }
         TvButton(if (busy) "Вход…" else "Войти", Modifier.width(480.dp), selected = true, fill = true) { doLogin() }
         Spacer(Modifier.height(10.dp))
-        TvButton("Продолжить без входа", Modifier.width(480.dp), fill = true) { onGuest() }
+        TvButton("Продолжить без входа", Modifier.width(480.dp).focusRequester(guestFocus), fill = true) { onGuest() }
     }
 }

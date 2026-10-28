@@ -31,10 +31,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -106,6 +108,10 @@ private fun DetailContent(
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val setBackdrop = LocalBackdrop.current
+    val listState = rememberLazyListState()
+    // фон страницы — постер этого аниме
+    LaunchedEffect(a.anime_id) { setBackdrop(a.poster?.medium.fixUrl()) }
 
     val videos = remember(a) { a.videos.orEmpty() }
     val players = remember(videos) { videos.map { it.playerName() }.distinct() }
@@ -189,13 +195,22 @@ private fun DetailContent(
 
     Box(Modifier.fillMaxSize()) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 52.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                IconTvButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
+                IconTvButton(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    "Назад",
+                    modifier = Modifier.onFocusChanged {
+                        // вернулись к кнопке «Назад» — возвращаем страницу наверх, чтобы она не была обрезана
+                        if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) }
+                    },
+                    onClick = onBack
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                     Box(
                         Modifier

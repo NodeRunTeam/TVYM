@@ -65,6 +65,7 @@ object Cache {
     val top = TtlCache<String, List<CardData>>(30 * 60 * 1000L)
     val lists = TtlCache<Int, List<CardData>>(2 * 60 * 1000L)
     val details = TtlCache<String, AnimeDetail>(5 * 60 * 1000L)
+    val genres = TtlCache<String, List<Genre>>(60 * 60 * 1000L)
 
     // Какое значение sort_forward даёт нужный порядок (в документации не описано — определяем сами)
     val forward = HashMap<String, Boolean>()
@@ -201,93 +202,6 @@ private fun CardRow(
     }
 }
 
-/** Большой баннер сверху: листает самые популярные аниме сезона */
-@Composable
-private fun Hero(items: List<CardData>, onOpen: (String) -> Unit) {
-    val list = remember(items) { items.take(6) }
-    if (list.isEmpty()) return
-    var idx by remember(list) { mutableIntStateOf(0) }
-    LaunchedEffect(list) {
-        while (true) {
-            delay(8000)
-            idx = (idx + 1) % list.size
-        }
-    }
-    val item = list[idx.coerceIn(0, list.lastIndex)]
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 48.dp)
-            .height(280.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF2B2160), Color(0xFF15122E))))
-    ) {
-        Crossfade(targetState = item, animationSpec = tween(800), label = "hero") { c ->
-            Box(Modifier.fillMaxSize()) {
-                Row(
-                    Modifier.fillMaxSize().padding(28.dp),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Chip("Популярно в этом сезоне", bg = Accent.copy(alpha = 0.55f))
-                        Text(
-                            c.title,
-                            color = Color.White,
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        c.subtitle?.let { Text(it, color = TextDim, fontSize = 15.sp) }
-                        c.description?.let {
-                            Text(
-                                it,
-                                color = Color(0xFFD0D4DD),
-                                fontSize = 14.sp,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        AccentButton("Смотреть", icon = Icons.Default.PlayArrow) { onOpen(c.url) }
-                    }
-                    AsyncImage(
-                        model = c.poster,
-                        contentDescription = c.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(0.7f)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Panel)
-                    )
-                }
-            }
-        }
-        // точки-индикаторы
-        Row(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            list.forEachIndexed { i, _ ->
-                Box(
-                    Modifier
-                        .padding(horizontal = 3.dp)
-                        .height(6.dp)
-                        .width(if (i == idx) 22.dp else 6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (i == idx) Color.White else Color(0x66FFFFFF))
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun HomeScreen(onOpen: (String) -> Unit, listState: LazyListState = rememberLazyListState()) {
     val (watching, retryWatching) = rememberLoad<List<CardData>>(null) {
@@ -304,21 +218,6 @@ fun HomeScreen(onOpen: (String) -> Unit, listState: LazyListState = rememberLazy
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        // Баннер: пока грузится — мерцающая заглушка, при ошибке или пустом списке — не показываем
-        if (season is Load.Loading) {
-            item {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 48.dp)
-                        .height(280.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .shimmer()
-                )
-            }
-        } else if (season is Load.Ok && season.v.isNotEmpty()) {
-            item { Hero(season.v, onOpen) }
-        }
         // Блок «Продолжить просмотр» скрываем, если смотреть нечего (например, гость)
         val emptyWatching = watching is Load.Ok && watching.v.isEmpty()
         if (!emptyWatching) {

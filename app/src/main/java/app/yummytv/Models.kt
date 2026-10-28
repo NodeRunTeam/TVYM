@@ -139,3 +139,6 @@ fun JsonElement?.ratingValue(): Double? {
         }
     }.getOrNull()
 }
+
+data class Genre(val title: String? = null, val value: Double? = null, val group_id: Double? = null)
+data class GenresData(val genres: List<Genre>? = null)

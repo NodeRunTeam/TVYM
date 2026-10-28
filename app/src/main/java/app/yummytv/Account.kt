@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -49,8 +50,12 @@ val AccountSortNames = listOf("По названию", "По рейтингу", 
 
 @Composable
 fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: () -> Unit) {
+    val setBackdrop = LocalBackdrop.current
     FocusBox(
-        modifier = Modifier.fillMaxWidth().peekOnFocus(peekY = 56.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .peekOnFocus(peekY = 56.dp)
+            .onFocusChanged { if (it.hasFocus) setBackdrop(item.poster) },
         onClick = onClick,
         shape = RoundedCornerShape(16.dp)
     ) { focused ->

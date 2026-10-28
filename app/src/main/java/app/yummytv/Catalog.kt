@@ -1,6 +1,15 @@
 package app.yummytv
 
 import androidx.compose.foundation.layout.Arrangement
+import kotlinx.coroutines.delay
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,6 +53,27 @@ suspend fun loadCatalogPage(offset: Int): List<CardData> =
     loadSorted("catalog-views", ascending = false, value = { it.views?.toDouble() }) { fwd ->
         Net.api.animeList(sort = "views", sortForward = fwd, limit = 40, offset = offset).response.orEmpty()
     }.map { it.toCard() }
+
+/** Каталог с фильтром по жанрам (и, при желании, с текстом) */
+suspend fun loadFiltered(offset: Int, q: String, genres: List<Int>): List<CardData> =
+    loadSorted("catalog-views", ascending = false, value = { it.views?.toDouble() }) { fwd ->
+        Net.api.animeList(
+            sort = "views",
+            sortForward = fwd,
+            genres = genres,
+            q = q.ifBlank { null },
+            limit = 40,
+            offset = offset
+        ).response.orEmpty()
+    }.map { it.toCard() }
+
+suspend fun loadGenres(): List<Genre> =
+    Cache.genres.get("all") ?: Cache.genres.put(
+        "all",
+        Net.api.genres().response?.genres.orEmpty()
+            .filter { it.value != null && !it.title.isNullOrBlank() }
+            .sortedBy { it.title.orEmpty() }
+    )
 
 suspend fun loadTop(type: String): List<CardData> {
     val all = ArrayList<AnimeCard>()
@@ -136,29 +166,179 @@ fun PagedGrid(
 
 // ---------- экраны ----------
 
+/** Поле поиска: сначала это обычная кнопка, по нажатию превращается в поле ввода */
 @Composable
-fun CatalogScreen(onOpen: (String) -> Unit) {
-    var q by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize()) {
+private fun SearchBox(
+    value: String,
+    onValue: (String) -> Unit,
+    onSubmit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    var hadFocus by remember { mutableStateOf(false) }
+    var restore by remember { mutableStateOf(false) }
+    val fieldFocus = remember { FocusRequester() }
+    val buttonFocus = remember { FocusRequester() }
+
+    if (editing) {
+        LaunchedEffect(Unit) {
+            delay(100)
+            try {
+                fieldFocus.requestFocus()
+            } catch (e: Exception) {
+            }
+        }
         OutlinedTextField(
-            value = q,
-            onValueChange = { q = it },
+            value = value,
+            onValueChange = onValue,
             singleLine = true,
             placeholder = { Text("Найти аниме по названию") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextDim) },
             shape = RoundedCornerShape(16.dp),
             colors = tvFieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { submitted = q.trim() }),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp)
+            keyboardActions = KeyboardActions(onSearch = {
+                hadFocus = false
+                restore = true
+                editing = false
+                onSubmit()
+            }),
+            modifier = modifier
+                .focusRequester(fieldFocus)
+                .onFocusChanged {
+                    if (it.isFocused) {
+                        hadFocus = true
+                    } else if (hadFocus) {
+                        // ушли с поля — применяем введённое и снова показываем кнопку
+                        hadFocus = false
+                        editing = false
+                        onSubmit()
+                    }
+                }
         )
-        PagedGrid(key = submitted, onOpen = onOpen) { offset ->
+    } else {
+        LaunchedEffect(restore) {
+            if (restore) {
+                delay(80)
+                try {
+                    buttonFocus.requestFocus()
+                } catch (e: Exception) {
+                }
+                restore = false
+            }
+        }
+        FocusBox(
+            modifier = modifier.focusRequester(buttonFocus),
+            onClick = { editing = true },
+            shape = RoundedCornerShape(16.dp)
+        ) { focused ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(if (focused) GlassHi else Glass)
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null, tint = TextDim)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    if (value.isBlank()) "Найти аниме по названию" else value,
+                    color = if (value.isBlank()) TextDim else Color.White,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CatalogScreen(onOpen: (String) -> Unit) {
+    var q by remember { mutableStateOf("") }
+    var submitted by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }   // отмечаем в меню
+    var applied by remember { mutableStateOf<Set<Int>>(emptySet()) }    // применено к каталогу
+    var sheet by remember { mutableStateOf(false) }
+    var genreList by remember { mutableStateOf<List<Genre>>(emptyList()) }
+    var genreError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            genreList = loadGenres()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            genreError = true
+        }
+    }
+
+    val ids = applied.sorted()
+    val names = genreList.filter {
+        val v = it.value?.toInt()
+        v != null && v in applied
+    }.map { it.title.orEmpty() }
+    val genreLabel = if (names.isEmpty()) "Жанры" else "Жанры: " + names.joinToString(", ")
+
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SearchBox(
+                value = q,
+                onValue = { q = it },
+                onSubmit = { submitted = q.trim() },
+                modifier = Modifier.weight(1f)
+            )
+            TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
+                selected = applied
+                sheet = true
+            }
+        }
+        PagedGrid(key = submitted to ids, onOpen = onOpen) { offset ->
             val s = submitted
-            if (s.isBlank()) {
-                loadCatalogPage(offset)
+            when {
+                ids.isNotEmpty() -> loadFiltered(offset, s, ids)
+                s.isBlank() -> loadCatalogPage(offset)
+                else -> Net.api.search(s, 40, offset).response.orEmpty().map { it.toCard() }
+            }
+        }
+    }
+
+    if (sheet) {
+        val items = if (genreList.isEmpty()) {
+            listOf(SheetItem(if (genreError) "Не удалось загрузить жанры" else "Загрузка…"))
+        } else {
+            buildList {
+                add(SheetItem(if (selected.isEmpty()) "Показать всё" else "Показать результаты (${selected.size})"))
+                add(SheetItem("Сбросить выбор"))
+                genreList.forEach { g ->
+                    val id = g.value?.toInt()
+                    val on = id != null && id in selected
+                    add(SheetItem(g.title.orEmpty(), selected = on, mark = if (on) "✓" else null))
+                }
+            }
+        }
+        SideSheet(
+            title = "Жанры",
+            items = items,
+            onDismiss = {
+                applied = selected
+                sheet = false
+            }
+        ) { i ->
+            if (genreList.isEmpty() || i == 0) {
+                applied = selected
+                sheet = false
+            } else if (i == 1) {
+                selected = emptySet()
             } else {
-                Net.api.search(s, 40, offset).response.orEmpty().map { it.toCard() }
+                val id = genreList[i - 2].value?.toInt()
+                if (id != null) {
+                    selected = if (id in selected) selected - id else selected + id
+                }
             }
         }
     }

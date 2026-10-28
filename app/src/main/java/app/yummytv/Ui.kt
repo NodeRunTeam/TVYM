@@ -344,7 +344,12 @@ fun Modifier.peekOnFocus(peekX: Dp = 0.dp, peekY: Dp = 0.dp): Modifier {
 
 @Composable
 fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.peekOnFocus(peekX = 56.dp, peekY = 48.dp)) {
+    val setBackdrop = LocalBackdrop.current
+    Column(
+        modifier
+            .peekOnFocus(peekX = 56.dp, peekY = 48.dp)
+            .onFocusChanged { if (it.hasFocus) setBackdrop(item.poster) }
+    ) {
         FocusBox(
             modifier = Modifier.fillMaxWidth().aspectRatio(0.68f),
             onClick = onClick,

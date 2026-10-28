@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -120,6 +121,8 @@ fun App() {
     var settings by remember { mutableStateOf(false) }
     var accountSort by remember { mutableIntStateOf(0) }
     val homeState = rememberLazyListState()
+    val backdrop = remember { mutableStateOf<String?>(null) }
+    val setBackdrop = remember { { u: String? -> backdrop.value = u } }
     val stack = remember { mutableStateListOf<Screen>() }
 
     // обновляем токен раз в 2 дня (он живёт 2 недели)
@@ -173,7 +176,9 @@ fun App() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Bg)) {
+        CompositionLocalProvider(LocalBackdrop provides setBackdrop) {
         Surface(Modifier.fillMaxSize().appBackground(), color = Color.Transparent) {
+            Backdrop(backdrop)
             when {
                 Config.APP_TOKEN.startsWith("PASTE") -> MissingToken()
                 !loggedIn && !guest -> LoginScreen(
@@ -259,6 +264,7 @@ fun App() {
                     }
                 }
             }
+        }
         }
     }
 }
