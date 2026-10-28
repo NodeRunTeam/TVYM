@@ -95,12 +95,26 @@ suspend fun loadSeason(): List<CardData> {
 }
 
 suspend fun loadWatching(): List<CardData> {
-    fun LastWatch.toCard() = CardData(
-        title = title ?: "—",
-        subtitle = ep_title?.takeIf { it.isNotBlank() },
-        poster = poster?.medium.fixUrl(),
-        url = anime_url ?: anime_id.toString()
-    )
+    fun LastWatch.toCard(): CardData {
+        val ep = ep_title?.trim().orEmpty()
+        val n = ep.toIntOrNull()
+        val d = duration
+        val t = end_time
+        // серия досмотрена почти до конца -> «Просмотрено серий: N», иначе «Продолжить с N серии»
+        val finished = d != null && t != null && d > 0 && t >= d * 0.9
+        val sub = when {
+            n != null && finished -> "Просмотрено серий: $n"
+            n != null -> "Продолжить с $n серии"
+            ep.isNotEmpty() -> ep
+            else -> null
+        }
+        return CardData(
+            title = title ?: "—",
+            subtitle = sub,
+            poster = poster?.medium.fixUrl(),
+            url = anime_url ?: anime_id.toString()
+        )
+    }
 
     val direct = try {
         Net.api.lastWatches().response
@@ -160,16 +174,16 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 56.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         // Блок «Продолжить просмотр» скрываем, если смотреть нечего (например, гость)
+        item { CardRow(seasonTitle, season, retrySeason, onOpen) }
         val emptyWatching = watching is Load.Ok && watching.v.isEmpty()
         if (!emptyWatching) {
             item { CardRow("Продолжить просмотр", watching, retryWatching, onOpen) }
         }
-        item { CardRow(seasonTitle, season, retrySeason, onOpen) }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }

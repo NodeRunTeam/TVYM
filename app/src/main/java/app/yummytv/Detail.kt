@@ -1,6 +1,11 @@
 package app.yummytv
 
 import android.widget.Toast
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +53,7 @@ private fun VideoItem.sortKey(): Double = index ?: number?.toDoubleOrNull() ?: 0
 fun DetailScreen(
     url: String,
     loggedIn: Boolean,
+    onBack: () -> Unit,
     onOpen: (String) -> Unit,
     onPlay: (Screen.Player) -> Unit
 ) {
@@ -55,7 +61,7 @@ fun DetailScreen(
         Cache.details.get(url)
             ?: Cache.details.put(url, Net.api.anime(url).response ?: error("Пустой ответ сервера"))
     }
-    LoadView(st, retry) { a -> DetailContent(a, loggedIn, onOpen, onPlay) }
+    LoadView(st, retry) { a -> DetailContent(a, loggedIn, onBack, onOpen, onPlay) }
 }
 
 @Composable
@@ -76,10 +82,12 @@ private fun SelectorButton(label: String, value: String, modifier: Modifier = Mo
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailContent(
     a: AnimeDetail,
     loggedIn: Boolean,
+    onBack: () -> Unit,
     onOpen: (String) -> Unit,
     onPlay: (Screen.Player) -> Unit
 ) {
@@ -111,10 +119,19 @@ private fun DetailContent(
     }
 
     val watched = Watched.ids
-    val ep = episodes.firstOrNull { it.number == epSel }
-        ?: episodes.firstOrNull { it.video_id !in watched }
-        ?: episodes.firstOrNull()
-    val hasWatched = episodes.any { it.video_id in watched }
+    // Серия по умолчанию — та, на которой остановились: последняя открытая,
+    // иначе самая дальняя из просмотренных (например, из истории на сайте)
+    val lastNum = remember(a) { Watched.lastEp(a.anime_id) }
+    val resumeEp = episodes.firstOrNull { lastNum != null && it.number == lastNum }
+        ?: episodes.filter { it.video_id in watched }.maxByOrNull { it.sortKey() }
+    val ep = episodes.firstOrNull { it.number == epSel } ?: resumeEp ?: episodes.firstOrNull()
+    val epNumber = ep?.number.orEmpty()
+    val epInt = epNumber.toIntOrNull()
+    val playLabel = when {
+        ep == null || resumeEp == null -> "Смотреть"
+        epInt != null -> "Смотреть $epInt серию"
+        else -> "Смотреть $epNumber".trim()
+    }
 
     LaunchedEffect(a.anime_id, loggedIn) {
         if (loggedIn) {
@@ -130,6 +147,7 @@ private fun DetailContent(
     fun play(v: VideoItem) {
         val link = v.iframe_url.fixUrl() ?: return
         epSel = v.number
+        Watched.setLastEp(a.anime_id, v.number)
         Watched.add(v.video_id)
         if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
         onPlay(
@@ -138,7 +156,8 @@ private fun DetailContent(
                 url = link,
                 kodik = isKodik,
                 episodes = episodes,
-                videoId = v.video_id
+                videoId = v.video_id,
+                animeId = a.anime_id
             )
         )
     }
@@ -156,72 +175,72 @@ private fun DetailContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 64.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                Box(Modifier.width(240.dp).aspectRatio(0.7f).clip(RoundedCornerShape(12.dp))) {
-                    AsyncImage(
-                        model = a.poster?.fullsize.fixUrl() ?: a.poster?.medium.fixUrl(),
-                        contentDescription = a.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    a.rating.ratingValue()?.takeIf { it > 0.0 }
-                        ?.let { RatingBadge(it, Modifier.align(Alignment.TopStart)) }
-                }
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        a.title ?: "—",
-                        color = Color.White,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(meta, color = TextDim, fontSize = 15.sp)
-                    Text(
-                        a.description.orEmpty(),
-                        color = Color(0xFFD0D4DD),
-                        fontSize = 14.sp,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    if (videos.isEmpty()) {
-                        Text("Для этого аниме нет доступных серий", color = TextDim, fontSize = 16.sp)
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            SelectorButton("Плеер", player ?: "—", Modifier.widthIn(min = 150.dp, max = 260.dp)) {
-                                sheet = Pick.Player
-                            }
-                            SelectorButton("Озвучка", dub ?: "—", Modifier.widthIn(min = 180.dp, max = 340.dp)) {
-                                sheet = Pick.Dub
-                            }
-                            SelectorButton(
-                                "Серия",
-                                ep?.let { "№ ${it.number ?: "?"}" } ?: "—",
-                                Modifier.widthIn(min = 130.dp, max = 220.dp)
-                            ) { sheet = Pick.Episode }
-                        }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconTvButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
+                Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                    Box(Modifier.width(240.dp).aspectRatio(0.7f).clip(RoundedCornerShape(12.dp))) {
+                        AsyncImage(
+                            model = a.poster?.fullsize.fixUrl() ?: a.poster?.medium.fixUrl(),
+                            contentDescription = a.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        a.rating.ratingValue()?.takeIf { it > 0.0 }
+                            ?.let { RatingBadge(it, Modifier.align(Alignment.TopStart)) }
                     }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (ep != null) {
-                            AccentButton(
-                                (if (hasWatched) "▶  Продолжить — серия " else "▶  Смотреть — серия ") + (ep.number ?: "")
-                            ) { play(ep) }
+                        Text(
+                            a.title ?: "—",
+                            color = Color.White,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(meta, color = TextDim, fontSize = 15.sp)
+                        Text(
+                            a.description.orEmpty(),
+                            color = Color(0xFFD0D4DD),
+                            fontSize = 14.sp,
+                            maxLines = 5,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (videos.isEmpty()) {
+                            Text("Для этого аниме нет доступных серий", color = TextDim, fontSize = 16.sp)
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                SelectorButton("Плеер", player ?: "—", Modifier.weight(1f)) {
+                                    sheet = Pick.Player
+                                }
+                                SelectorButton("Озвучка", dub ?: "—", Modifier.weight(1f)) {
+                                    sheet = Pick.Dub
+                                }
+                            }
                         }
-                        if (loggedIn) {
-                            val current = ListNames.firstOrNull { it.first == myList }?.second ?: "Добавить в список"
-                            TvButton(current + "  ▾") { sheet = Pick.ListMenu }
+
+                        // Смотреть N серию | Список серий | Смотрю (цвет зависит от списка)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (ep != null) {
+                                AccentButton(playLabel, icon = Icons.Default.PlayArrow) { play(ep) }
+                                TvButton("Список серий") { sheet = Pick.Episode }
+                            }
+                            if (loggedIn) {
+                                val current = ListNames.firstOrNull { it.first == myList }?.second ?: "Добавить в список"
+                                TvButton(current + "  ▾", tint = myList?.let { ListColors[it] }) {
+                                    sheet = Pick.ListMenu
+                                }
+                            }
                         }
                     }
                 }

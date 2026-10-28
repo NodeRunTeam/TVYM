@@ -262,6 +262,8 @@ class PlayerLayout(context: Context, private val customControls: Boolean) : Fram
 
     fun handleKey(e: KeyEvent): Boolean {
         val down = e.action == KeyEvent.ACTION_DOWN
+        // После удержания ▲ отпускание клавиши уходит в окно меню серий — сбрасываем флаг заранее
+        if (down && e.keyCode == KeyEvent.KEYCODE_DPAD_UP && e.repeatCount == 0) upLong = false
         // Кнопка «Меню» — список серий (в обоих плеерах)
         if (e.keyCode == KeyEvent.KEYCODE_MENU) {
             if (down && e.repeatCount == 0) onMenu?.invoke()
@@ -423,6 +425,7 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
             val link = v.iframe_url.fixUrl()
             if (link != null && v.video_id != currentId) {
                 currentId = v.video_id
+                Watched.setLastEp(req.animeId, v.number)
                 Watched.add(v.video_id)
                 if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
                 layout?.load(link)

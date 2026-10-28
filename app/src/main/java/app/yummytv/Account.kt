@@ -45,7 +45,7 @@ private val AccountTabs = listOf(
     3 to "Брошено",
     4 to "Любимые"
 )
-private val SortNames = listOf("По названию", "По рейтингу", "По дате добавления")
+val AccountSortNames = listOf("По названию", "По рейтингу", "По дате добавления")
 
 @Composable
 fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: () -> Unit) {
@@ -108,7 +108,7 @@ private fun AnimeRows(items: List<CardData>, onOpen: (String) -> Unit) {
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 56.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize()
     ) {
@@ -121,8 +121,8 @@ private fun AnimeRows(items: List<CardData>, onOpen: (String) -> Unit) {
 @Composable
 fun AccountScreen(
     loggedIn: Boolean,
+    sort: Int,
     onLogin: () -> Unit,
-    onLogout: () -> Unit,
     onOpen: (String) -> Unit
 ) {
     if (!loggedIn || Session.userId == 0L) {
@@ -140,32 +140,14 @@ fun AccountScreen(
     }
 
     var sel by remember { mutableIntStateOf(0) }
-    var sort by remember { mutableIntStateOf(0) }
-    var settings by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                Session.nickname ?: "Аккаунт",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            TvButton("Настройки") { settings = true }
-        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp)
         ) {
             itemsIndexed(AccountTabs) { i, tab ->
                 TvButton(tab.second, selected = sel == i) { sel = i }
-            }
-            item {
-                TvButton("Сортировка: " + SortNames[sort]) { sort = (sort + 1) % SortNames.size }
             }
         }
 
@@ -185,17 +167,6 @@ fun AccountScreen(
                 }
             }
             AnimeRows(sorted, onOpen)
-        }
-    }
-
-    if (settings) {
-        SideSheet(
-            title = "Настройки",
-            items = listOf(SheetItem("Выйти из аккаунта"), SheetItem("Закрыть")),
-            onDismiss = { settings = false }
-        ) { i ->
-            settings = false
-            if (i == 0) onLogout()
         }
     }
 }

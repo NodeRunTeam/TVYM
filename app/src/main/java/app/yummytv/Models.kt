@@ -61,7 +61,9 @@ data class LastWatch(
     val title: String? = null,
     val poster: Poster? = null,
     val ep_title: String? = null,
-    val video_id: Long = 0
+    val video_id: Long = 0,
+    val end_time: Double? = null,
+    val duration: Double? = null
 )
 
 data class Feed(

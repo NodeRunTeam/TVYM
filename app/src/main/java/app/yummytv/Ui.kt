@@ -3,7 +3,15 @@ package app.yummytv
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -65,6 +73,15 @@ val Panel = Color(0xFF232733)
 val TextDim = Color(0xFF9AA1B0)
 val Gold = Color(0xFFF2A900)
 val Green = Color(0xFF3DDC84)
+
+// цвет кнопки списка на странице аниме (id списка -> цвет)
+val ListColors = mapOf(
+    0 to Color(0xFF22A559), // Смотрю — зелёный
+    1 to Color(0xFF8B5CF6), // В планах — фиолетовый
+    2 to Color(0xFF2F7DE1), // Просмотрено — синий
+    3 to Color(0xFF6B7280), // Брошено — серый
+    5 to Color(0xFFD98E04)  // Отложено — янтарный
+)
 
 // id списка на сервере -> название (для кнопки «в список» на странице аниме)
 val ListNames = listOf(0 to "Смотрю", 1 to "В планах", 2 to "Просмотрено", 3 to "Брошено", 5 to "Отложено")
@@ -193,13 +210,14 @@ fun TvButton(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     fill: Boolean = false,
+    tint: Color? = null,
     onClick: () -> Unit
 ) {
     FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
         Box(
             Modifier
                 .then(if (fill) Modifier.fillMaxWidth() else Modifier)
-                .background(if (selected) Accent.copy(alpha = 0.45f) else Panel)
+                .background(tint ?: if (selected) Accent.copy(alpha = 0.45f) else Panel)
                 .padding(horizontal = 18.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -209,13 +227,25 @@ fun TvButton(
 }
 
 @Composable
-fun AccentButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun AccentButton(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
     FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
-        Box(
-            Modifier.background(Accent).padding(horizontal = 26.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center
+        Row(
+            Modifier.background(Accent).padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (icon != null) Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
             Text(text, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+/** Кнопка-иконка (шестерёнка, «назад» и т.п.) */
+@Composable
+fun IconTvButton(icon: ImageVector, desc: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
+        Box(Modifier.background(Panel).padding(10.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = desc, tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -246,9 +276,15 @@ fun RankBadge(rank: Int, modifier: Modifier = Modifier) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier) {
+    // При фокусе прокручиваем так, чтобы было видно и постер, и подпись под ним
+    val bring = remember { BringIntoViewRequester() }
+    var hasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(hasFocus) { if (hasFocus) bring.bringIntoView() }
+
+    Column(modifier.bringIntoViewRequester(bring).onFocusChanged { hasFocus = it.hasFocus }) {
         FocusBox(
             modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(Panel),
             onClick = onClick
@@ -273,7 +309,7 @@ fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Uni
             modifier = Modifier.padding(top = 8.dp)
         )
         item.subtitle?.let {
-            Text(it, color = TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(it, color = TextDim, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -288,7 +324,7 @@ fun CardGrid(items: List<CardData>, onOpen: (String) -> Unit) {
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 56.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize()

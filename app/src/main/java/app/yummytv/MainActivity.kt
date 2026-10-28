@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +25,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +63,8 @@ sealed interface Screen {
         val url: String,
         val kodik: Boolean,
         val episodes: List<VideoItem>,
-        val videoId: Long
+        val videoId: Long,
+        val animeId: Long = 0L
     ) : Screen
 }
 
@@ -67,8 +72,10 @@ sealed interface Screen {
 private fun TopBar(
     tab: Tab,
     randomBusy: Boolean,
+    loggedIn: Boolean,
     onTab: (Tab) -> Unit,
-    onRandom: () -> Unit
+    onRandom: () -> Unit,
+    onSettings: () -> Unit
 ) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 12.dp),
@@ -98,6 +105,7 @@ private fun TopBar(
         TvButton(if (randomBusy) "Ищу…" else "Случайное") { onRandom() }
         Spacer(Modifier.weight(1f))
         TvButton("Аккаунт", selected = tab == Tab.Account) { onTab(Tab.Account) }
+        if (loggedIn) IconTvButton(Icons.Default.Settings, "Настройки") { onSettings() }
     }
 }
 
@@ -109,6 +117,8 @@ fun App() {
     var guest by remember { mutableStateOf(Session.guest) }
     var tab by remember { mutableStateOf(Tab.Home) }
     var randomBusy by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }
+    var accountSort by remember { mutableIntStateOf(0) }
     val stack = remember { mutableStateListOf<Screen>() }
 
     // обновляем токен раз в 2 дня (он живёт 2 недели)
@@ -174,17 +184,30 @@ fun App() {
                     BackHandler(enabled = top !is Screen.Player && (stack.isNotEmpty() || tab != Tab.Home)) {
                         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) else tab = Tab.Home
                     }
+                    // отступы под «безопасную зону» телевизора (по краям экран часто обрезается)
+                    val safe = Modifier.fillMaxSize().padding(top = 20.dp, bottom = 28.dp)
                     when (top) {
-                        is Screen.Detail -> DetailScreen(
-                            top.url,
-                            loggedIn,
-                            onOpen = { stack.add(Screen.Detail(it)) }
-                        ) { p -> stack.add(p) }
+                        is Screen.Detail -> Box(safe) {
+                            DetailScreen(
+                                url = top.url,
+                                loggedIn = loggedIn,
+                                onBack = { stack.removeAt(stack.lastIndex) },
+                                onOpen = { stack.add(Screen.Detail(it)) },
+                                onPlay = { p -> stack.add(p) }
+                            )
+                        }
                         is Screen.Player -> PlayerScreen(top, loggedIn) {
                             stack.removeAt(stack.lastIndex)
                         }
-                        null -> Column(Modifier.fillMaxSize().padding(bottom = 20.dp)) {
-                            TopBar(tab, randomBusy, onTab = { tab = it }, onRandom = onRandom)
+                        null -> Column(safe) {
+                            TopBar(
+                                tab = tab,
+                                randomBusy = randomBusy,
+                                loggedIn = loggedIn,
+                                onTab = { tab = it },
+                                onRandom = onRandom,
+                                onSettings = { settings = true }
+                            )
                             val open: (String) -> Unit = { stack.add(Screen.Detail(it)) }
                             when (tab) {
                                 Tab.Home -> HomeScreen(open)
@@ -192,18 +215,38 @@ fun App() {
                                 Tab.Top -> TopScreen(open)
                                 Tab.Account -> AccountScreen(
                                     loggedIn = loggedIn,
+                                    sort = accountSort,
                                     onLogin = { Session.guest = false; guest = false },
-                                    onLogout = {
-                                        Session.clear()
-                                        Cache.clearUser()
-                                        loggedIn = false
-                                        guest = false
-                                        tab = Tab.Home
-                                    },
                                     onOpen = open
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // настройки (шестерёнка справа от «Аккаунт»)
+            if (settings) {
+                val onAccount = tab == Tab.Account && stack.isEmpty()
+                val items = buildList {
+                    if (onAccount) add(SheetItem("Сортировка: " + AccountSortNames[accountSort]))
+                    add(SheetItem("Выйти из аккаунта"))
+                }
+                SideSheet(
+                    title = Session.nickname ?: "Настройки",
+                    items = items,
+                    onDismiss = { settings = false }
+                ) { i ->
+                    settings = false
+                    if (onAccount && i == 0) {
+                        accountSort = (accountSort + 1) % AccountSortNames.size
+                    } else {
+                        Session.clear()
+                        Cache.clearUser()
+                        stack.clear()
+                        loggedIn = false
+                        guest = false
+                        tab = Tab.Home
                     }
                 }
             }

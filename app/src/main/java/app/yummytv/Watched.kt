@@ -67,6 +67,13 @@ object Watched {
         save()
     }
 
+    /** Номер серии, которую открывали последней (для кнопки «Смотреть N серию») */
+    fun lastEp(animeId: Long): String? = sp.getString("e_$animeId", null)
+
+    fun setLastEp(animeId: Long, number: String?) {
+        sp.edit().putString("e_$animeId", number).apply()
+    }
+
     fun choice(animeId: Long): Pair<String?, String?> =
         sp.getString("p_$animeId", null) to sp.getString("d_$animeId", null)
 
