@@ -160,7 +160,7 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 56.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {

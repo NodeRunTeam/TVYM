@@ -26,12 +26,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.launch
 
 /** Круглый курсор, которым управляют стрелками пульта */
 class CursorView(context: Context) : View(context) {
@@ -74,7 +76,11 @@ private fun findActivity(c: Context): Activity? {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-class PlayerLayout(context: Context) : FrameLayout(context) {
+class PlayerLayout(context: Context, private val customControls: Boolean) : FrameLayout(context) {
+    /** Вызывается, когда нужно открыть меню выбора серии */
+    var onMenu: (() -> Unit)? = null
+    private var upLong = false
+
     private fun matchParent() =
         FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
@@ -132,7 +138,7 @@ class PlayerLayout(context: Context) : FrameLayout(context) {
         web.webChromeClient = chrome
 
         cursor.visibility = View.GONE
-        addView(cursor, matchParent())
+        if (customControls) addView(cursor, matchParent())
 
         hint.text = "Курсор: стрелки — двигать, ОК — нажать, Назад — выключить курсор"
         hint.setTextColor(Color.WHITE)
@@ -140,14 +146,16 @@ class PlayerLayout(context: Context) : FrameLayout(context) {
         hint.setPadding(24, 12, 24, 12)
         hint.textSize = 14f
         hint.visibility = View.GONE
-        addView(
-            hint,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.START
+        if (customControls) {
+            addView(
+                hint,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.START
+                )
             )
-        )
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -254,6 +262,36 @@ class PlayerLayout(context: Context) : FrameLayout(context) {
 
     fun handleKey(e: KeyEvent): Boolean {
         val down = e.action == KeyEvent.ACTION_DOWN
+        // Кнопка «Меню» — список серий (в обоих плеерах)
+        if (e.keyCode == KeyEvent.KEYCODE_MENU) {
+            if (down && e.repeatCount == 0) onMenu?.invoke()
+            return true
+        }
+        return if (customControls) handleCustom(e, down) else handleStandard(e, down)
+    }
+
+    /** Alloha: стандартное управление, перехватываем только удержание «вверх» (список серий) */
+    private fun handleStandard(e: KeyEvent, down: Boolean): Boolean {
+        if (e.keyCode != KeyEvent.KEYCODE_DPAD_UP) return false
+        if (down) {
+            if (e.repeatCount >= 1) {
+                if (e.repeatCount == 1) {
+                    upLong = true
+                    onMenu?.invoke()
+                }
+                return true
+            }
+            return false
+        }
+        if (upLong) {
+            upLong = false
+            return true
+        }
+        return false
+    }
+
+    /** Kodik: курсор-«мышка», ОК — пауза, ▼ — перемотка на 90 сек */
+    private fun handleCustom(e: KeyEvent, down: Boolean): Boolean {
         val first = down && e.repeatCount == 0
         return when (e.keyCode) {
             KeyEvent.KEYCODE_BACK -> {
@@ -274,14 +312,18 @@ class PlayerLayout(context: Context) : FrameLayout(context) {
                 if (first) sendKey(KeyEvent.KEYCODE_SPACE)
                 true
             }
-            KeyEvent.KEYCODE_MENU -> {
-                if (first) setCursorMode(!cursorMode)
-                true
-            }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (cursorMode) {
                     if (down) move(0, -1, e.repeatCount)
-                } else if (first) {
+                } else if (down) {
+                    // удержание — список серий, короткое нажатие (при отпускании) — курсор
+                    if (e.repeatCount == 1) {
+                        upLong = true
+                        onMenu?.invoke()
+                    }
+                } else if (upLong) {
+                    upLong = false
+                } else {
                     setCursorMode(true)
                 }
                 true
@@ -331,13 +373,21 @@ class PlayerLayout(context: Context) : FrameLayout(context) {
 }
 
 @Composable
-fun PlayerScreen(title: String, url: String, onClose: () -> Unit) {
+fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var layout by remember { mutableStateOf<PlayerLayout?>(null) }
-    LaunchedEffect(url) {
+    var currentId by remember { mutableLongStateOf(req.videoId) }
+    var showEps by remember { mutableStateOf(false) }
+    val watched = Watched.ids
+
+    LaunchedEffect(req.url) {
         Toast.makeText(
             ctx,
-            "ОК — пауза · ▲ курсор (меню, качество) · ▼ +90 сек · Назад — выход",
+            if (req.kodik) {
+                "ОК — пауза · ▲ курсор · ▼ +90 сек · Меню или удержание ▲ — список серий · Назад — выход"
+            } else {
+                "Меню или удержание ▲ — список серий · Назад — выход"
+            },
             Toast.LENGTH_LONG
         ).show()
     }
@@ -347,11 +397,36 @@ fun PlayerScreen(title: String, url: String, onClose: () -> Unit) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { c ->
-            PlayerLayout(c).also {
-                it.load(url)
+            PlayerLayout(c, req.kodik).also {
+                it.onMenu = { showEps = true }
+                it.load(req.url)
                 layout = it
             }
         },
         onRelease = { it.destroyWeb() }
     )
+
+    if (showEps && req.episodes.isNotEmpty()) {
+        SideSheet(
+            title = "Серия",
+            items = req.episodes.map {
+                SheetItem(
+                    "Серия ${it.number ?: "?"}",
+                    selected = it.video_id == currentId,
+                    mark = if (it.video_id in watched) "✓ просмотрено" else null
+                )
+            },
+            onDismiss = { showEps = false }
+        ) { i ->
+            showEps = false
+            val v = req.episodes[i]
+            val link = v.iframe_url.fixUrl()
+            if (link != null && v.video_id != currentId) {
+                currentId = v.video_id
+                Watched.add(v.video_id)
+                if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
+                layout?.load(link)
+            }
+        }
+    }
 }

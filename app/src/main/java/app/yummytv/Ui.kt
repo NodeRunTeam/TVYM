@@ -103,6 +103,15 @@ fun AnimeCard.toCard(rank: Int? = null) = CardData(
     added = date ?: 0L
 )
 
+fun ViewingItem.toCard(pos: Int) = CardData(
+    title = "$pos. ${title ?: "—"}",
+    subtitle = listOfNotNull(type?.name, year?.toString(), data?.text?.takeIf { it.isNotBlank() })
+        .joinToString(" · ").ifEmpty { null },
+    poster = poster?.medium.fixUrl(),
+    url = anime_url ?: anime_id.toString(),
+    status = anime_status?.alias
+)
+
 // ---------- загрузка данных ----------
 
 sealed interface Load<out T> {
@@ -279,7 +288,7 @@ fun CardGrid(items: List<CardData>, onOpen: (String) -> Unit) {
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
-        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 56.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize()

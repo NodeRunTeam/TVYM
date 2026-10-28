@@ -54,7 +54,13 @@ enum class Tab {
 
 sealed interface Screen {
     data class Detail(val url: String) : Screen
-    data class Player(val title: String, val url: String) : Screen
+    data class Player(
+        val title: String,
+        val url: String,
+        val kodik: Boolean,
+        val episodes: List<VideoItem>,
+        val videoId: Long
+    ) : Screen
 }
 
 @Composable
@@ -169,13 +175,15 @@ fun App() {
                         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) else tab = Tab.Home
                     }
                     when (top) {
-                        is Screen.Detail -> DetailScreen(top.url, loggedIn) { title, url ->
-                            stack.add(Screen.Player(title, url))
-                        }
-                        is Screen.Player -> PlayerScreen(top.title, top.url) {
+                        is Screen.Detail -> DetailScreen(
+                            top.url,
+                            loggedIn,
+                            onOpen = { stack.add(Screen.Detail(it)) }
+                        ) { p -> stack.add(p) }
+                        is Screen.Player -> PlayerScreen(top, loggedIn) {
                             stack.removeAt(stack.lastIndex)
                         }
-                        null -> Column(Modifier.fillMaxSize()) {
+                        null -> Column(Modifier.fillMaxSize().padding(bottom = 20.dp)) {
                             TopBar(tab, randomBusy, onTab = { tab = it }, onRandom = onRandom)
                             val open: (String) -> Unit = { stack.add(Screen.Detail(it)) }
                             when (tab) {

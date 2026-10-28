@@ -84,6 +84,19 @@ data class VideoItem(
     val duration: Int? = null
 )
 
+data class ViewingData(val id: Long? = null, val index: Double? = null, val text: String? = null)
+
+data class ViewingItem(
+    val anime_id: Long = 0,
+    val anime_url: String? = null,
+    val title: String? = null,
+    val poster: Poster? = null,
+    val year: Int? = null,
+    val type: TypeInfo? = null,
+    val anime_status: Status? = null,
+    val data: ViewingData? = null
+)
+
 data class AnimeDetail(
     val anime_id: Long = 0,
     val anime_url: String? = null,
@@ -94,7 +107,8 @@ data class AnimeDetail(
     val anime_status: Status? = null,
     val type: TypeInfo? = null,
     val rating: JsonElement? = null,
-    val videos: List<VideoItem>? = null
+    val videos: List<VideoItem>? = null,
+    val viewing_order: List<ViewingItem>? = null
 )
 
 data class LoginBody(

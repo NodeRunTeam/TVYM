@@ -48,12 +48,18 @@ private val AccountTabs = listOf(
 private val SortNames = listOf("По названию", "По рейтингу", "По дате добавления")
 
 @Composable
-fun AnimeRow(item: CardData, odd: Boolean, onClick: () -> Unit) {
+fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: () -> Unit) {
     FocusBox(modifier = Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(8.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(if (odd) Panel else Panel.copy(alpha = 0.55f))
+                .background(
+                    when {
+                        current -> Accent.copy(alpha = 0.35f)
+                        odd -> Panel
+                        else -> Panel.copy(alpha = 0.55f)
+                    }
+                )
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -102,7 +108,7 @@ private fun AnimeRows(items: List<CardData>, onOpen: (String) -> Unit) {
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 56.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize()
     ) {

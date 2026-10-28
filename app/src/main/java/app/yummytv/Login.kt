@@ -1,6 +1,15 @@
 package app.yummytv
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
     var login by remember { mutableStateOf("") }
@@ -75,22 +85,36 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
         }
     }
 
+    // Поля стоят вверху экрана и экран прокручивается — клавиатура их не закрывает
+    val scroll = rememberScrollState()
+    val loginReq = remember { BringIntoViewRequester() }
+    val passReq = remember { BringIntoViewRequester() }
+
     Column(
-        Modifier.fillMaxSize().padding(48.dp),
-        verticalArrangement = Arrangement.Center,
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .imePadding()
+            .padding(horizontal = 48.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Image(painter = painterResource(R.drawable.logo), contentDescription = null, modifier = Modifier.size(72.dp))
-        Spacer(Modifier.height(12.dp))
-        Text("Yummy TV", color = Accent, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painter = painterResource(R.drawable.logo), contentDescription = null, modifier = Modifier.size(48.dp))
+            Spacer(Modifier.width(12.dp))
+            Text("Yummy TV", color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = login,
             onValueChange = { login = it },
             singleLine = true,
             label = { Text("Логин или email") },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            modifier = Modifier.width(480.dp)
+            modifier = Modifier
+                .width(480.dp)
+                .bringIntoViewRequester(loginReq)
+                .onFocusEvent { if (it.isFocused) scope.launch { loginReq.bringIntoView() } }
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
@@ -100,7 +124,11 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             label = { Text("Пароль") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            modifier = Modifier.width(480.dp)
+            keyboardActions = KeyboardActions(onDone = { doLogin() }),
+            modifier = Modifier
+                .width(480.dp)
+                .bringIntoViewRequester(passReq)
+                .onFocusEvent { if (it.isFocused) scope.launch { passReq.bringIntoView() } }
         )
         Spacer(Modifier.height(16.dp))
         error?.let {
