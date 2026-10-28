@@ -29,6 +29,30 @@ interface YummyApi {
         @Query("offset") offset: Int = 0
     ): ListResp<AnimeCard>
 
+    @GET("anime")
+    suspend fun animeList(
+        @Query("sort") sort: String? = null,
+        @Query("sort_forward") sortForward: Boolean? = null,
+        @Query("types") types: String? = null,
+        @Query("season") season: String? = null,
+        @Query("from_year") fromYear: Int? = null,
+        @Query("to_year") toYear: Int? = null,
+        @Query("limit") limit: Int = 40,
+        @Query("offset") offset: Int = 0
+    ): ListResp<AnimeCard>
+
+    @GET("video/last-watches")
+    suspend fun lastWatches(): ListResp<LastWatch>
+
+    @GET("video/watch-history")
+    suspend fun watchHistory(
+        @Query("limit") limit: Int = 100,
+        @Query("offset") offset: Int = 0
+    ): JsonElement
+
+    @PUT("video/{id}")
+    suspend fun markWatched(@Path("id") id: Long, @Body body: WatchBody): Response<ResponseBody>
+
     @GET("anime/{url}")
     suspend fun anime(
         @Path("url") url: String,

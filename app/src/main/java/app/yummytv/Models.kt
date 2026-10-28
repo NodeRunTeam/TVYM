@@ -13,10 +13,12 @@ data class Poster(
     val fullsize: String? = null
 )
 
-data class Status(val title: String? = null)
+data class Status(val title: String? = null, val alias: String? = null)
 data class TypeInfo(val name: String? = null)
 
 // rating бывает и числом, и объектом — поэтому JsonElement
+data class TopInfo(val global: Int? = null, val category: Int? = null)
+
 data class AnimeCard(
     val anime_id: Long = 0,
     val anime_url: String? = null,
@@ -26,7 +28,10 @@ data class AnimeCard(
     val description: String? = null,
     val anime_status: Status? = null,
     val type: TypeInfo? = null,
-    val rating: JsonElement? = null
+    val rating: JsonElement? = null,
+    val views: Long? = null,
+    val top: TopInfo? = null,
+    val date: Long? = null
 )
 
 data class Episodes(val aired: Int? = null, val count: Int? = null)
@@ -75,7 +80,8 @@ data class VideoItem(
     val iframe_url: String? = null,
     val data: VideoData? = null,
     val number: String? = null,
-    val index: Double? = null
+    val index: Double? = null,
+    val duration: Int? = null
 )
 
 data class AnimeDetail(
@@ -104,6 +110,7 @@ data class Profile(val id: Long = 0, val nickname: String? = null)
 data class TokenData(val token: String? = null)
 data class MyList(val list: Int? = null)
 data class SetListBody(val list: Int, val date: Long? = null)
+data class WatchBody(val date: Long, val time: Int = 0, val duration: Int? = null)
 
 fun JsonElement?.ratingValue(): Double? {
     if (this == null || this.isJsonNull) return null

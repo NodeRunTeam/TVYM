@@ -11,8 +11,8 @@ android {
         applicationId = "app.yummytv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     buildTypes {
@@ -47,6 +47,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
