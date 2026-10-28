@@ -26,7 +26,18 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import java.util.Calendar
 
+/** Последняя серия, на которой пользователь остановился (по данным сайта) */
+class ServerLast(val ep: String, val date: Long, val videoId: Long)
+
 object Cache {
+    val serverLast = HashMap<Long, ServerLast>()
+
+    fun noteServerLast(animeId: Long, ep: String, date: Long, videoId: Long) {
+        if (animeId == 0L || ep.isBlank()) return
+        val old = serverLast[animeId]
+        if (old == null || date >= old.date) serverLast[animeId] = ServerLast(ep.trim(), date, videoId)
+    }
+
     val home = TtlCache<String, List<CardData>>(10 * 60 * 1000L)
     val top = TtlCache<String, List<CardData>>(30 * 60 * 1000L)
     val lists = TtlCache<Int, List<CardData>>(2 * 60 * 1000L)
@@ -36,6 +47,7 @@ object Cache {
     val forward = HashMap<String, Boolean>()
 
     fun clearUser() {
+        serverLast.clear()
         home.remove("watching")
         lists.clear()
         details.clear()
@@ -124,6 +136,11 @@ suspend fun loadWatching(): List<CardData> {
         null
     }
     val list = if (!direct.isNullOrEmpty()) direct else Net.api.feed().response?.last_watches.orEmpty()
+    // запоминаем, где остановились: это нужно странице аниме («Смотреть N серию») и отметкам ✓
+    for (w in list) {
+        Cache.noteServerLast(w.anime_id, w.ep_title.orEmpty(), (w.date ?: 0.0).toLong(), w.video_id)
+    }
+    Watched.addAll(list.map { it.video_id }.filter { it != 0L })
     return list.map { it.toCard() }
 }
 
@@ -137,14 +154,20 @@ private fun CardRow(
     onOpen: (String) -> Unit
 ) {
     Column {
-        Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(
+            title,
+            color = Color.White,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 48.dp)
+        )
         when (state) {
             is Load.Loading -> Box(
                 Modifier.fillMaxWidth().height(220.dp),
                 contentAlignment = Alignment.Center
             ) { CircularProgressIndicator(color = Accent) }
             is Load.Err -> Row(
-                Modifier.padding(vertical = 12.dp),
+                Modifier.padding(horizontal = 48.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -153,7 +176,7 @@ private fun CardRow(
             }
             is Load.Ok -> LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp, horizontal = 6.dp)
+                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 12.dp, bottom = 12.dp)
             ) {
                 items(state.v) { c ->
                     PosterCard(c, Modifier.width(150.dp)) { onOpen(c.url) }
@@ -174,7 +197,7 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {

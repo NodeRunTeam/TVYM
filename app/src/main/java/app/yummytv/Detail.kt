@@ -47,6 +47,13 @@ private enum class Pick { Player, Dub, Episode, ListMenu }
 
 private fun VideoItem.playerName(): String = data?.player?.takeIf { it.isNotBlank() } ?: "Плеер"
 private fun VideoItem.dubName(): String = data?.dubbing?.takeIf { it.isNotBlank() } ?: "Озвучка"
+private fun sameEp(a: String?, b: String?): Boolean {
+    if (a == null || b == null) return false
+    if (a.trim() == b.trim()) return true
+    val x = a.trim().toIntOrNull()
+    return x != null && x == b.trim().toIntOrNull()
+}
+
 private fun VideoItem.sortKey(): Double = index ?: number?.toDoubleOrNull() ?: 0.0
 
 @Composable
@@ -121,8 +128,16 @@ private fun DetailContent(
     val watched = Watched.ids
     // Серия по умолчанию — та, на которой остановились: последняя открытая,
     // иначе самая дальняя из просмотренных (например, из истории на сайте)
-    val lastNum = remember(a) { Watched.lastEp(a.anime_id) }
-    val resumeEp = episodes.firstOrNull { lastNum != null && it.number == lastNum }
+    // Берём более свежее: отметка на этом устройстве или данные сайта («Продолжить просмотр»)
+    val localNum = remember(a) { Watched.lastEp(a.anime_id) }
+    val localTime = remember(a) { Watched.lastEpTime(a.anime_id) }
+    val server = Cache.serverLast[a.anime_id]
+    val lastNum: String? = when {
+        localNum != null && (server == null || localTime >= server.date) -> localNum
+        server != null -> server.ep
+        else -> null
+    }
+    val resumeEp = episodes.firstOrNull { lastNum != null && sameEp(it.number, lastNum) }
         ?: episodes.filter { it.video_id in watched }.maxByOrNull { it.sortKey() }
     val ep = episodes.firstOrNull { it.number == epSel } ?: resumeEp ?: episodes.firstOrNull()
     val epNumber = ep?.number.orEmpty()

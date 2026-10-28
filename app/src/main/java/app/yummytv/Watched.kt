@@ -70,8 +70,13 @@ object Watched {
     /** Номер серии, которую открывали последней (для кнопки «Смотреть N серию») */
     fun lastEp(animeId: Long): String? = sp.getString("e_$animeId", null)
 
+    fun lastEpTime(animeId: Long): Long = sp.getLong("t_$animeId", 0L)
+
     fun setLastEp(animeId: Long, number: String?) {
-        sp.edit().putString("e_$animeId", number).apply()
+        sp.edit()
+            .putString("e_$animeId", number)
+            .putLong("t_$animeId", System.currentTimeMillis() / 1000)
+            .apply()
     }
 
     fun choice(animeId: Long): Pair<String?, String?> =
@@ -99,11 +104,28 @@ private fun collectVideoIds(e: JsonElement?, out: MutableSet<Long>) {
     } else if (e.isJsonObject) {
         val o = e.asJsonObject
         val v = o.get("video_id")
+        var videoId = 0L
         if (v != null && v.isJsonPrimitive) {
             try {
-                out.add(v.asLong)
+                videoId = v.asLong
+                out.add(videoId)
             } catch (ex: Exception) {
             }
+        }
+        // если в записи есть и аниме, и номер серии — запоминаем «где остановились»
+        try {
+            val aid = o.get("anime_id")?.takeIf { it.isJsonPrimitive }?.asLong
+            var ep: String? = null
+            for (k in listOf("ep_title", "episode", "number")) {
+                val x = o.get(k)
+                if (x != null && x.isJsonPrimitive && x.asString.isNotBlank()) {
+                    ep = x.asString
+                    break
+                }
+            }
+            val date = o.get("date")?.takeIf { it.isJsonPrimitive }?.asLong ?: 0L
+            if (aid != null && ep != null) Cache.noteServerLast(aid, ep, date, videoId)
+        } catch (ex: Exception) {
         }
         for ((_, child) in o.entrySet()) {
             if (child.isJsonArray || child.isJsonObject) collectVideoIds(child, out)

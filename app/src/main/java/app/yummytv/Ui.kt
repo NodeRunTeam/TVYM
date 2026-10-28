@@ -11,7 +11,12 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -276,15 +281,33 @@ fun RankBadge(rank: Int, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * При фокусе прокручивает список так, чтобы элемент был виден целиком
+ * и рядом оставался кусочек соседних (понятно, что список не закончился).
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    // При фокусе прокручиваем так, чтобы было видно и постер, и подпись под ним
+fun Modifier.peekOnFocus(peekX: Dp = 0.dp, peekY: Dp = 0.dp): Modifier {
     val bring = remember { BringIntoViewRequester() }
+    var size by remember { mutableStateOf(IntSize.Zero) }
     var hasFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(hasFocus) { if (hasFocus) bring.bringIntoView() }
+    val density = LocalDensity.current
+    LaunchedEffect(hasFocus, size) {
+        if (hasFocus && size != IntSize.Zero) {
+            val px = with(density) { peekX.toPx() }
+            val py = with(density) { peekY.toPx() }
+            bring.bringIntoView(Rect(-px, -py, size.width + px, size.height + py))
+        }
+    }
+    return this
+        .onSizeChanged { size = it }
+        .bringIntoViewRequester(bring)
+        .onFocusChanged { hasFocus = it.hasFocus }
+}
 
-    Column(modifier.bringIntoViewRequester(bring).onFocusChanged { hasFocus = it.hasFocus }) {
+@Composable
+fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(modifier.peekOnFocus(peekX = 56.dp, peekY = 48.dp)) {
         FocusBox(
             modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(Panel),
             onClick = onClick

@@ -176,7 +176,7 @@ fun App() {
             when {
                 Config.APP_TOKEN.startsWith("PASTE") -> MissingToken()
                 !loggedIn && !guest -> LoginScreen(
-                    onLoggedIn = { loggedIn = true; guest = false },
+                    onLoggedIn = { Cache.clearUser(); loggedIn = true; guest = false },
                     onGuest = { Session.guest = true; guest = true }
                 )
                 else -> {

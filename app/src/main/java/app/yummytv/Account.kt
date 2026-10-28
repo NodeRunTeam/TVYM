@@ -49,7 +49,11 @@ val AccountSortNames = listOf("По названию", "По рейтингу", 
 
 @Composable
 fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: () -> Unit) {
-    FocusBox(modifier = Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(8.dp)) {
+    FocusBox(
+        modifier = Modifier.fillMaxWidth().peekOnFocus(peekY = 56.dp),
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp)
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
