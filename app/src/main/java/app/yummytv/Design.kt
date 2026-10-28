@@ -59,20 +59,23 @@ fun brandStyle(size: Int): TextStyle =
 @Composable
 fun Modifier.shimmer(): Modifier {
     val t = rememberInfiniteTransition(label = "shimmer")
-    val x by t.animateFloat(
+    val x = t.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing)),
         label = "shimmerX"
     )
-    val shift = x * 1600f
-    return this.background(
-        Brush.linearGradient(
-            colors = listOf(Panel, PanelHi, Panel),
-            start = Offset(shift - 600f, 0f),
-            end = Offset(shift, 400f)
+    // значение читается только при рисовании — без перекомпоновки каждый кадр
+    return this.drawBehind {
+        val shift = x.value * 1600f
+        drawRect(
+            Brush.linearGradient(
+                colors = listOf(Panel, PanelHi, Panel),
+                start = Offset(shift - 600f, 0f),
+                end = Offset(shift, 400f)
+            )
         )
-    )
+    }
 }
 
 @Composable

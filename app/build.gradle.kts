@@ -11,13 +11,16 @@ android {
         applicationId = "app.yummytv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.7"
+        versionCode = 8
+        versionName = "0.7.1"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            isDebuggable = false
+            // подпись debug-ключом, чтобы APK можно было поставить без своего keystore
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
