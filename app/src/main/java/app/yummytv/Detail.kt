@@ -31,7 +31,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -73,9 +77,11 @@ fun DetailScreen(
 
 @Composable
 private fun SelectorButton(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
+    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(14.dp)) { focused ->
         Column(
-            Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 8.dp)
+            Modifier.fillMaxWidth()
+                .background(if (focused) GlassHi else Glass)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Text(label, color = TextDim, fontSize = 12.sp)
             Text(
@@ -181,23 +187,36 @@ private fun DetailContent(
     val order = remember(a) { a.viewing_order.orEmpty() }
     val showOrder = order.isNotEmpty() && !(order.size == 1 && order[0].anime_id == a.anime_id)
 
-    val meta = listOfNotNull(
-        a.type?.name,
-        a.year?.toString(),
-        a.rating.ratingValue()?.let { "★ " + it.fmt() },
-        a.anime_status?.title
-    ).joinToString(" · ")
-
+    Box(Modifier.fillMaxSize()) {
+    // размытый постер на фоне
+    AsyncImage(
+        model = a.poster?.big.fixUrl() ?: a.poster?.medium.fixUrl(),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize().blur(48.dp).alpha(0.4f)
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Color(0x800B0B1A), Color(0xF00B0B1A)))
+        )
+    )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 40.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 IconTvButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
                 Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                    Box(Modifier.width(240.dp).aspectRatio(0.7f).clip(RoundedCornerShape(12.dp))) {
+                    Box(
+                        Modifier
+                            .width(240.dp)
+                            .aspectRatio(0.7f)
+                            .shadow(24.dp, RoundedCornerShape(22.dp), ambientColor = Accent2, spotColor = Accent2)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Panel)
+                    ) {
                         AsyncImage(
                             model = a.poster?.fullsize.fixUrl() ?: a.poster?.medium.fixUrl(),
                             contentDescription = a.title,
@@ -205,7 +224,7 @@ private fun DetailContent(
                             modifier = Modifier.fillMaxSize()
                         )
                         a.rating.ratingValue()?.takeIf { it > 0.0 }
-                            ?.let { RatingBadge(it, Modifier.align(Alignment.TopStart)) }
+                            ?.let { RatingBadge(it, Modifier.align(Alignment.TopStart).padding(8.dp)) }
                     }
                     Column(
                         Modifier.weight(1f),
@@ -214,12 +233,28 @@ private fun DetailContent(
                         Text(
                             a.title ?: "—",
                             color = Color.White,
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(meta, color = TextDim, fontSize = 15.sp)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            a.type?.name?.let { Chip(it) }
+                            a.year?.let { Chip(it.toString()) }
+                            a.rating.ratingValue()?.takeIf { it > 0.0 }
+                                ?.let { Chip("★ " + it.fmt(), color = Gold, bg = Gold.copy(alpha = 0.16f)) }
+                            a.anime_status?.title?.takeIf { it.isNotBlank() }?.let {
+                                val c = when (a.anime_status?.alias) {
+                                    "ongoing" -> Accent2
+                                    "released" -> Green
+                                    else -> TextDim
+                                }
+                                Chip(it, color = c, bg = c.copy(alpha = 0.16f))
+                            }
+                        }
                         Text(
                             a.description.orEmpty(),
                             color = Color(0xFFD0D4DD),
@@ -264,13 +299,7 @@ private fun DetailContent(
 
         if (showOrder) {
             item {
-                Text(
-                    "Порядок просмотра",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 20.dp, bottom = 6.dp)
-                )
+                SectionTitle("Порядок просмотра", Modifier.padding(top = 24.dp, bottom = 8.dp))
             }
             itemsIndexed(order) { i, o ->
                 val isCurrent = o.anime_id == a.anime_id
@@ -279,6 +308,8 @@ private fun DetailContent(
                 }
             }
         }
+    }
+
     }
 
     // ---------- выезжающие меню ----------

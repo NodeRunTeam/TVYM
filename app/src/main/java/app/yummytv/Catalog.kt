@@ -15,6 +15,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,9 +91,7 @@ fun PagedGrid(
     }
 
     if (items.isEmpty() && loading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Accent)
-        }
+        SkeletonGrid()
         return
     }
     if (items.isEmpty() && error != null) {
@@ -111,7 +113,7 @@ fun PagedGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
+        columns = GridCells.Adaptive(160.dp),
         contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -144,6 +146,9 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
             onValueChange = { q = it },
             singleLine = true,
             placeholder = { Text("Найти аниме по названию") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextDim) },
+            shape = RoundedCornerShape(16.dp),
+            colors = tvFieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { submitted = q.trim() }),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp)
@@ -170,13 +175,7 @@ fun TopScreen(onOpen: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "Топ-100 аниме",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 16.dp)
-            )
+            SectionTitle("Топ-100 аниме", Modifier.padding(end = 16.dp))
             TopTabs.forEachIndexed { i, tab ->
                 TvButton(tab.first, selected = sel == i) { sel = i }
             }
@@ -185,6 +184,6 @@ fun TopScreen(onOpen: (String) -> Unit) {
         val (st, retry) = rememberLoad(type) {
             Cache.top.get(type) ?: Cache.top.put(type, loadTop(type))
         }
-        LoadView(st, retry) { items -> CardGrid(items, onOpen) }
+        LoadView(st, retry, skeleton = { SkeletonGrid() }) { items -> CardGrid(items, onOpen) }
     }
 }

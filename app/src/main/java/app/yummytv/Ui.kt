@@ -3,6 +3,9 @@ package app.yummytv
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
@@ -56,6 +59,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -73,9 +78,9 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 val Accent = Color(0xFFFF5C8A)
-val Bg = Color(0xFF0F1115)
-val Panel = Color(0xFF232733)
-val TextDim = Color(0xFF9AA1B0)
+val Bg = Color(0xFF0B0B1A)
+val Panel = Color(0xFF1B1C36)
+val TextDim = Color(0xFFA3A9BC)
 val Gold = Color(0xFFF2A900)
 val Green = Color(0xFF3DDC84)
 
@@ -111,7 +116,10 @@ data class CardData(
     val rating: Double? = null,
     val rank: Int? = null,
     val status: String? = null,
-    val added: Long = 0L
+    val added: Long = 0L,
+    val description: String? = null,
+    val banner: String? = null,
+    val progress: Float? = null
 )
 
 fun AnimeCard.toCard(rank: Int? = null) = CardData(
@@ -122,7 +130,9 @@ fun AnimeCard.toCard(rank: Int? = null) = CardData(
     rating = rating.ratingValue()?.takeIf { it > 0.0 },
     rank = rank,
     status = anime_status?.alias,
-    added = date ?: 0L
+    added = date ?: 0L,
+    description = description?.takeIf { it.isNotBlank() },
+    banner = poster?.big.fixUrl() ?: poster?.medium.fixUrl()
 )
 
 fun ViewingItem.toCard(pos: Int) = CardData(
@@ -161,10 +171,19 @@ fun <T> rememberLoad(key: Any? = null, block: suspend () -> T): Pair<Load<T>, ()
 }
 
 @Composable
-fun <T> LoadView(state: Load<T>, retry: () -> Unit, content: @Composable (T) -> Unit) {
+fun <T> LoadView(
+    state: Load<T>,
+    retry: () -> Unit,
+    skeleton: (@Composable () -> Unit)? = null,
+    content: @Composable (T) -> Unit
+) {
     when (state) {
-        is Load.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Accent)
+        is Load.Loading -> if (skeleton != null) {
+            skeleton()
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Accent)
+            }
         }
         is Load.Err -> Column(
             Modifier.fillMaxSize().padding(48.dp),
@@ -185,23 +204,29 @@ fun <T> LoadView(state: Load<T>, retry: () -> Unit, content: @Composable (T) -> 
 fun FocusBox(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(14.dp),
     content: @Composable (Boolean) -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) 1.06f else 1f,
+        animationSpec = tween(160),
+        label = "focusScale"
+    )
+    val glow by animateDpAsState(
+        targetValue = if (focused) 18.dp else 0.dp,
+        animationSpec = tween(160),
+        label = "focusGlow"
+    )
     Box(
         modifier = modifier
             .onFocusChanged { focused = it.isFocused }
             .graphicsLayer {
-                val s = if (focused) 1.05f else 1f
-                scaleX = s
-                scaleY = s
+                scaleX = scale
+                scaleY = scale
             }
-            .border(
-                width = if (focused) 3.dp else 0.dp,
-                color = if (focused) Accent else Color.Transparent,
-                shape = shape
-            )
+            .shadow(glow, shape, clip = false, ambientColor = Accent, spotColor = Accent)
+            .then(if (focused) Modifier.border(3.dp, AccentBrush, shape) else Modifier)
             .clip(shape)
             .clickable(onClick = onClick)
     ) {
@@ -218,29 +243,41 @@ fun TvButton(
     tint: Color? = null,
     onClick: () -> Unit
 ) {
-    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
+    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(14.dp)) { focused ->
+        val bg = when {
+            tint != null -> Modifier.background(tint.copy(alpha = if (focused) 1f else 0.85f))
+            selected -> Modifier.background(AccentBrush)
+            else -> Modifier.background(if (focused) GlassHi else Glass)
+        }
         Box(
             Modifier
                 .then(if (fill) Modifier.fillMaxWidth() else Modifier)
-                .background(tint ?: if (selected) Accent.copy(alpha = 0.45f) else Panel)
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .then(bg)
+                .padding(horizontal = 20.dp, vertical = 11.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(text, color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text,
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
 fun AccentButton(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
-    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
+    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(14.dp)) {
         Row(
-            Modifier.background(Accent).padding(horizontal = 20.dp, vertical = 12.dp),
+            Modifier.background(AccentBrush).padding(horizontal = 24.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (icon != null) Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-            Text(text, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(text, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
@@ -248,8 +285,11 @@ fun AccentButton(text: String, modifier: Modifier = Modifier, icon: ImageVector?
 /** Кнопка-иконка (шестерёнка, «назад» и т.п.) */
 @Composable
 fun IconTvButton(icon: ImageVector, desc: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(10.dp)) {
-        Box(Modifier.background(Panel).padding(10.dp), contentAlignment = Alignment.Center) {
+    FocusBox(modifier = modifier, onClick = onClick, shape = RoundedCornerShape(50)) { focused ->
+        Box(
+            Modifier.background(if (focused) GlassHi else Glass).padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(icon, contentDescription = desc, tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
@@ -257,15 +297,17 @@ fun IconTvButton(icon: ImageVector, desc: String, modifier: Modifier = Modifier,
 
 @Composable
 fun RatingBadge(value: Double, modifier: Modifier = Modifier) {
-    Text(
-        "★ " + value.fmt(),
-        color = Color.White,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = modifier
-            .background(Gold, RoundedCornerShape(bottomEnd = 8.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    )
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xB3000000))
+            .padding(horizontal = 9.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("★", color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(4.dp))
+        Text(value.fmt(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable
@@ -276,8 +318,9 @@ fun RankBadge(rank: Int, modifier: Modifier = Modifier) {
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(bottomStart = 8.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .clip(RoundedCornerShape(50))
+            .background(AccentBrush)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
     )
 }
 
@@ -309,30 +352,57 @@ fun Modifier.peekOnFocus(peekX: Dp = 0.dp, peekY: Dp = 0.dp): Modifier {
 fun PosterCard(item: CardData, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(modifier.peekOnFocus(peekX = 56.dp, peekY = 48.dp)) {
         FocusBox(
-            modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).background(Panel),
-            onClick = onClick
+            modifier = Modifier.fillMaxWidth().aspectRatio(0.68f),
+            onClick = onClick,
+            shape = RoundedCornerShape(18.dp)
         ) {
-            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().background(Panel)) {
                 AsyncImage(
                     model = item.poster,
                     contentDescription = item.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                item.rating?.let { RatingBadge(it, Modifier.align(Alignment.TopStart)) }
-                item.rank?.let { RankBadge(it, Modifier.align(Alignment.TopEnd)) }
+                // название поверх постера на тёмном градиенте
+                val p = item.progress?.takeIf { it > 0f }
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF2070710))))
+                        .padding(start = 10.dp, end = 10.dp, top = 30.dp, bottom = if (p != null) 12.dp else 10.dp)
+                ) {
+                    Text(
+                        item.title,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    item.subtitle?.let {
+                        Text(it, color = TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                item.rating?.let { RatingBadge(it, Modifier.align(Alignment.TopStart).padding(8.dp)) }
+                item.rank?.let { RankBadge(it, Modifier.align(Alignment.TopEnd).padding(8.dp)) }
+                if (p != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color(0x66FFFFFF))
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(p.coerceIn(0f, 1f))
+                            .height(4.dp)
+                            .background(AccentBrush)
+                    )
+                }
             }
-        }
-        Text(
-            item.title,
-            color = Color.White,
-            fontSize = 14.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-        item.subtitle?.let {
-            Text(it, color = TextDim, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -346,7 +416,7 @@ fun CardGrid(items: List<CardData>, onOpen: (String) -> Unit) {
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
+        columns = GridCells.Adaptive(160.dp),
         contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -390,7 +460,7 @@ fun SideSheet(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.6f))
                 .pointerInput(Unit) { detectTapGestures { onDismiss() } }
         ) {
             AnimatedVisibility(
@@ -402,7 +472,7 @@ fun SideSheet(
                     Modifier
                         .width(380.dp)
                         .fillMaxHeight()
-                        .background(Bg)
+                        .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
                         .pointerInput(Unit) { detectTapGestures { } }
                         .padding(horizontal = 20.dp, vertical = 24.dp)
                 ) {
@@ -418,12 +488,12 @@ fun SideSheet(
                             FocusBox(
                                 modifier = (if (i == selIdx) Modifier.focusRequester(focus) else Modifier).fillMaxWidth(),
                                 onClick = { onPick(i) },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
+                                shape = RoundedCornerShape(14.dp)
+                            ) { focused ->
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
-                                        .background(if (item.selected) Accent.copy(alpha = 0.4f) else Panel)
+                                        .background(if (item.selected) Accent.copy(alpha = 0.35f) else if (focused) GlassHi else Glass)
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

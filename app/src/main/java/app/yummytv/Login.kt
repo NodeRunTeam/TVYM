@@ -3,6 +3,7 @@ package app.yummytv
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -102,7 +103,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painter = painterResource(R.drawable.logo), contentDescription = null, modifier = Modifier.size(48.dp))
             Spacer(Modifier.width(12.dp))
-            Text("Yummy TV", color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text("Yummy TV", style = brandStyle(36))
         }
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
@@ -110,6 +111,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             onValueChange = { login = it },
             singleLine = true,
             label = { Text("Логин или email") },
+            shape = RoundedCornerShape(16.dp),
+            colors = tvFieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             modifier = Modifier
                 .width(480.dp)
@@ -122,6 +125,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             onValueChange = { pass = it },
             singleLine = true,
             label = { Text("Пароль") },
+            shape = RoundedCornerShape(16.dp),
+            colors = tvFieldColors(),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { doLogin() }),
@@ -135,7 +140,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             Text(it, color = Color(0xFFFF8A8A), fontSize = 15.sp, modifier = Modifier.width(480.dp))
             Spacer(Modifier.height(12.dp))
         }
-        TvButton(if (busy) "Вход…" else "Войти", Modifier.width(480.dp), fill = true) { doLogin() }
+        TvButton(if (busy) "Вход…" else "Войти", Modifier.width(480.dp), selected = true, fill = true) { doLogin() }
         Spacer(Modifier.height(10.dp))
         TvButton("Продолжить без входа", Modifier.width(480.dp), fill = true) { onGuest() }
     }

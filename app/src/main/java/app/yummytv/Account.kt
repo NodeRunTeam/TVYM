@@ -52,19 +52,19 @@ fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: ()
     FocusBox(
         modifier = Modifier.fillMaxWidth().peekOnFocus(peekY = 56.dp),
         onClick = onClick,
-        shape = RoundedCornerShape(8.dp)
-    ) {
+        shape = RoundedCornerShape(16.dp)
+    ) { focused ->
         Row(
             Modifier
                 .fillMaxWidth()
                 .background(
                     when {
-                        current -> Accent.copy(alpha = 0.35f)
-                        odd -> Panel
-                        else -> Panel.copy(alpha = 0.55f)
+                        current -> Accent.copy(alpha = 0.30f)
+                        focused -> GlassHi
+                        else -> Glass
                     }
                 )
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -72,19 +72,19 @@ fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: ()
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(44.dp)
-                    .height(62.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Bg)
+                    .width(48.dp)
+                    .height(68.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Panel)
             )
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(16.dp))
             val dot = when (item.status) {
                 "ongoing" -> Color(0xFFA855F7)
                 "released" -> Green
                 else -> TextDim
             }
             Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     item.title,
@@ -97,7 +97,7 @@ fun AnimeRow(item: CardData, odd: Boolean, current: Boolean = false, onClick: ()
                 item.subtitle?.let { Text(it, color = TextDim, fontSize = 13.sp, maxLines = 1) }
             }
             item.rating?.let {
-                Text("★ " + it.fmt(), color = Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Chip("★ " + it.fmt(), color = Gold, bg = Gold.copy(alpha = 0.16f))
             }
         }
     }
@@ -113,7 +113,7 @@ private fun AnimeRows(items: List<CardData>, onOpen: (String) -> Unit) {
     }
     LazyColumn(
         contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         itemsIndexed(items) { i, c ->

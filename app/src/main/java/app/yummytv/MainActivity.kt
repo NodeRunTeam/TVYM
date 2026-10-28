@@ -80,12 +80,12 @@ private fun TopBar(
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FocusBox(
-            modifier = Modifier.size(46.dp),
+            modifier = Modifier.size(48.dp),
             onClick = { onTab(Tab.Home) },
-            shape = RoundedCornerShape(10.dp)
+            shape = RoundedCornerShape(14.dp)
         ) {
             Image(
                 painter = painterResource(R.drawable.logo),
@@ -95,16 +95,14 @@ private fun TopBar(
         }
         Text(
             "Yummy TV",
-            color = if (tab == Tab.Home) Accent else Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(end = 12.dp)
+            style = brandStyle(24),
+            modifier = Modifier.padding(start = 4.dp, end = 20.dp)
         )
-        TvButton("Каталог аниме", selected = tab == Tab.Catalog) { onTab(Tab.Catalog) }
-        TvButton("Топ-100", selected = tab == Tab.Top) { onTab(Tab.Top) }
-        TvButton(if (randomBusy) "Ищу…" else "Случайное") { onRandom() }
+        NavPill("Каталог", tab == Tab.Catalog) { onTab(Tab.Catalog) }
+        NavPill("Топ-100", tab == Tab.Top) { onTab(Tab.Top) }
+        NavPill(if (randomBusy) "Ищу…" else "Случайное", false) { onRandom() }
         Spacer(Modifier.weight(1f))
-        TvButton("Аккаунт", selected = tab == Tab.Account) { onTab(Tab.Account) }
+        NavPill("Аккаунт", tab == Tab.Account) { onTab(Tab.Account) }
         if (loggedIn) IconTvButton(Icons.Default.Settings, "Настройки") { onSettings() }
     }
 }
@@ -172,7 +170,7 @@ fun App() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Bg)) {
-        Surface(Modifier.fillMaxSize(), color = Bg) {
+        Surface(Modifier.fillMaxSize().appBackground(), color = Color.Transparent) {
             when {
                 Config.APP_TOKEN.startsWith("PASTE") -> MissingToken()
                 !loggedIn && !guest -> LoginScreen(
@@ -187,7 +185,7 @@ fun App() {
                     // отступы под «безопасную зону» телевизора (по краям экран часто обрезается)
                     val safe = Modifier.fillMaxSize().padding(top = 20.dp, bottom = 28.dp)
                     when (top) {
-                        is Screen.Detail -> Box(safe) {
+                        is Screen.Detail -> Box(Modifier.fillMaxSize()) {
                             DetailScreen(
                                 url = top.url,
                                 loggedIn = loggedIn,

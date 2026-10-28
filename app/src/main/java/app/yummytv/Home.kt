@@ -1,6 +1,27 @@
 package app.yummytv
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -124,7 +145,8 @@ suspend fun loadWatching(): List<CardData> {
             title = title ?: "—",
             subtitle = sub,
             poster = poster?.medium.fixUrl(),
-            url = anime_url ?: anime_id.toString()
+            url = anime_url ?: anime_id.toString(),
+            progress = if (d != null && t != null && d > 0) (t / d).toFloat().coerceIn(0f, 1f) else null
         )
     }
 
@@ -154,18 +176,9 @@ private fun CardRow(
     onOpen: (String) -> Unit
 ) {
     Column {
-        Text(
-            title,
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 48.dp)
-        )
+        SectionTitle(title, Modifier.padding(start = 48.dp))
         when (state) {
-            is Load.Loading -> Box(
-                Modifier.fillMaxWidth().height(220.dp),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator(color = Accent) }
+            is Load.Loading -> SkeletonRow()
             is Load.Err -> Row(
                 Modifier.padding(horizontal = 48.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -176,11 +189,111 @@ private fun CardRow(
             }
             is Load.Ok -> LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 12.dp, bottom = 12.dp)
+                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 20.dp)
             ) {
                 items(state.v) { c ->
                     PosterCard(c, Modifier.width(150.dp)) { onOpen(c.url) }
                 }
+            }
+        }
+    }
+}
+
+/** Большой баннер сверху: листает самые популярные аниме сезона */
+@Composable
+private fun Hero(items: List<CardData>, onOpen: (String) -> Unit) {
+    val list = remember(items) { items.take(6) }
+    if (list.isEmpty()) return
+    var idx by remember(list) { mutableIntStateOf(0) }
+    LaunchedEffect(list) {
+        while (true) {
+            delay(8000)
+            idx = (idx + 1) % list.size
+        }
+    }
+    val item = list[idx.coerceIn(0, list.lastIndex)]
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 48.dp)
+            .height(280.dp)
+            .clip(RoundedCornerShape(28.dp))
+    ) {
+        Crossfade(targetState = item, animationSpec = tween(800), label = "hero") { c ->
+            Box(Modifier.fillMaxSize()) {
+                // размытый постер как фон
+                AsyncImage(
+                    model = c.banner ?: c.poster,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().blur(36.dp).alpha(0.55f)
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xF00B0B1A), Color(0xA00B0B1A), Color(0x330B0B1A))
+                        )
+                    )
+                )
+                Row(
+                    Modifier.fillMaxSize().padding(28.dp),
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Chip("Популярно в этом сезоне", bg = Accent.copy(alpha = 0.55f))
+                        Text(
+                            c.title,
+                            color = Color.White,
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        c.subtitle?.let { Text(it, color = TextDim, fontSize = 15.sp) }
+                        c.description?.let {
+                            Text(
+                                it,
+                                color = Color(0xFFD0D4DD),
+                                fontSize = 14.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        AccentButton("Смотреть", icon = Icons.Default.PlayArrow) { onOpen(c.url) }
+                    }
+                    AsyncImage(
+                        model = c.poster,
+                        contentDescription = c.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(0.7f)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Panel)
+                    )
+                }
+            }
+        }
+        // точки-индикаторы
+        Row(
+            Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            list.forEachIndexed { i, _ ->
+                Box(
+                    Modifier
+                        .padding(horizontal = 3.dp)
+                        .height(6.dp)
+                        .width(if (i == idx) 22.dp else 6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (i == idx) Color.White else Color(0x66FFFFFF))
+                )
             }
         }
     }
@@ -197,16 +310,31 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
     LazyColumn(
-        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
+        // Баннер: пока грузится — мерцающая заглушка, при ошибке или пустом списке — не показываем
+        if (season is Load.Loading) {
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 48.dp)
+                        .height(280.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .shimmer()
+                )
+            }
+        } else if (season is Load.Ok && season.v.isNotEmpty()) {
+            item { Hero(season.v, onOpen) }
+        }
         // Блок «Продолжить просмотр» скрываем, если смотреть нечего (например, гость)
-        item { CardRow(seasonTitle, season, retrySeason, onOpen) }
         val emptyWatching = watching is Load.Ok && watching.v.isEmpty()
         if (!emptyWatching) {
             item { CardRow("Продолжить просмотр", watching, retryWatching, onOpen) }
         }
+        item { CardRow(seasonTitle, season, retrySeason, onOpen) }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
