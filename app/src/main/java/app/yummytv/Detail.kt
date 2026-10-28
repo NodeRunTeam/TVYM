@@ -188,21 +188,9 @@ private fun DetailContent(
     val showOrder = order.isNotEmpty() && !(order.size == 1 && order[0].anime_id == a.anime_id)
 
     Box(Modifier.fillMaxSize()) {
-    // размытый постер на фоне
-    AsyncImage(
-        model = a.poster?.big.fixUrl() ?: a.poster?.medium.fixUrl(),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.fillMaxSize().blur(48.dp).alpha(0.4f)
-    )
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0x800B0B1A), Color(0xF00B0B1A)))
-        )
-    )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 40.dp),
+        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 52.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
@@ -213,7 +201,6 @@ private fun DetailContent(
                         Modifier
                             .width(240.dp)
                             .aspectRatio(0.7f)
-                            .shadow(24.dp, RoundedCornerShape(22.dp), ambientColor = Accent2, spotColor = Accent2)
                             .clip(RoundedCornerShape(22.dp))
                             .background(Panel)
                     ) {

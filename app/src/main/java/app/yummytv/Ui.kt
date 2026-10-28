@@ -213,11 +213,6 @@ fun FocusBox(
         animationSpec = tween(160),
         label = "focusScale"
     )
-    val glow by animateDpAsState(
-        targetValue = if (focused) 18.dp else 0.dp,
-        animationSpec = tween(160),
-        label = "focusGlow"
-    )
     Box(
         modifier = modifier
             .onFocusChanged { focused = it.isFocused }
@@ -225,7 +220,6 @@ fun FocusBox(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(glow, shape, clip = false, ambientColor = Accent, spotColor = Accent)
             .then(if (focused) Modifier.border(3.dp, AccentBrush, shape) else Modifier)
             .clip(shape)
             .clickable(onClick = onClick)

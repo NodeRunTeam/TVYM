@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -117,6 +119,7 @@ fun App() {
     var randomBusy by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(false) }
     var accountSort by remember { mutableIntStateOf(0) }
+    val homeState = rememberLazyListState()
     val stack = remember { mutableStateListOf<Screen>() }
 
     // обновляем токен раз в 2 дня (он живёт 2 недели)
@@ -198,17 +201,25 @@ fun App() {
                             stack.removeAt(stack.lastIndex)
                         }
                         null -> Column(safe) {
-                            TopBar(
-                                tab = tab,
-                                randomBusy = randomBusy,
-                                loggedIn = loggedIn,
-                                onTab = { tab = it },
-                                onRandom = onRandom,
-                                onSettings = { settings = true }
-                            )
+                            Box(
+                                Modifier.onFocusChanged {
+                                    if (it.hasFocus && tab == Tab.Home) {
+                                        scope.launch { homeState.animateScrollToItem(0) }
+                                    }
+                                }
+                            ) {
+                                TopBar(
+                                    tab = tab,
+                                    randomBusy = randomBusy,
+                                    loggedIn = loggedIn,
+                                    onTab = { tab = it },
+                                    onRandom = onRandom,
+                                    onSettings = { settings = true }
+                                )
+                            }
                             val open: (String) -> Unit = { stack.add(Screen.Detail(it)) }
                             when (tab) {
-                                Tab.Home -> HomeScreen(open)
+                                Tab.Home -> HomeScreen(open, homeState)
                                 Tab.Catalog -> CatalogScreen(open)
                                 Tab.Top -> TopScreen(open)
                                 Tab.Account -> AccountScreen(

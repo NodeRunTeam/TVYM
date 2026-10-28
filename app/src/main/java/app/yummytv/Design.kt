@@ -45,25 +45,10 @@ val GlassHi = Color(0x2EFFFFFF)
 
 val AccentBrush: Brush = Brush.horizontalGradient(listOf(Accent, Accent2))
 
-/** Фон приложения: глубокий тёмный с мягкими фиолетовым и розовым свечениями по углам */
-fun Modifier.appBackground(): Modifier = this
-    .background(Bg)
-    .drawBehind {
-        drawRect(
-            Brush.radialGradient(
-                colors = listOf(Accent2.copy(alpha = 0.30f), Color.Transparent),
-                center = Offset(size.width * 0.88f, 0f),
-                radius = size.width * 0.62f
-            )
-        )
-        drawRect(
-            Brush.radialGradient(
-                colors = listOf(Accent.copy(alpha = 0.16f), Color.Transparent),
-                center = Offset(0f, size.height),
-                radius = size.width * 0.5f
-            )
-        )
-    }
+/** Фон приложения: тёмный, с еле заметным вертикальным градиентом (дёшево для телевизора) */
+fun Modifier.appBackground(): Modifier = this.background(
+    Brush.verticalGradient(listOf(Color(0xFF15122E), Bg))
+)
 
 /** Стиль текста с градиентом (логотип) */
 fun brandStyle(size: Int): TextStyle =

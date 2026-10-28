@@ -33,7 +33,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -219,23 +221,10 @@ private fun Hero(items: List<CardData>, onOpen: (String) -> Unit) {
             .padding(horizontal = 48.dp)
             .height(280.dp)
             .clip(RoundedCornerShape(28.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF2B2160), Color(0xFF15122E))))
     ) {
         Crossfade(targetState = item, animationSpec = tween(800), label = "hero") { c ->
             Box(Modifier.fillMaxSize()) {
-                // размытый постер как фон
-                AsyncImage(
-                    model = c.banner ?: c.poster,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().blur(36.dp).alpha(0.55f)
-                )
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(
-                            listOf(Color(0xF00B0B1A), Color(0xA00B0B1A), Color(0x330B0B1A))
-                        )
-                    )
-                )
                 Row(
                     Modifier.fillMaxSize().padding(28.dp),
                     horizontalArrangement = Arrangement.spacedBy(32.dp),
@@ -300,7 +289,7 @@ private fun Hero(items: List<CardData>, onOpen: (String) -> Unit) {
 }
 
 @Composable
-fun HomeScreen(onOpen: (String) -> Unit) {
+fun HomeScreen(onOpen: (String) -> Unit, listState: LazyListState = rememberLazyListState()) {
     val (watching, retryWatching) = rememberLoad<List<CardData>>(null) {
         Cache.home.get("watching") ?: Cache.home.put("watching", loadWatching())
     }
@@ -310,6 +299,7 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
