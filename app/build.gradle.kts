@@ -11,11 +11,16 @@ android {
         applicationId = "app.yummytv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.7.1"
+        versionCode = 9
+        versionName = "0.7.2"
     }
 
     buildTypes {
+        // Даже если сборка запускается как assembleDebug (имя app-debug.apk),
+        // отладочный режим отключён — иначе Compose на ТВ сильно тормозит
+        debug {
+            isDebuggable = false
+        }
         release {
             isMinifyEnabled = false
             isDebuggable = false
