@@ -47,6 +47,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
+import java.util.Calendar
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.TextRange
@@ -71,6 +72,39 @@ suspend fun loadFiltered(offset: Int, q: String, genres: List<Int>): List<CardDa
             offset = offset
         ).response.orEmpty()
     }.map { it.toCard() }
+
+/** Варианты сортировки каталога: название и значение параметра sort (null — по умолчанию) */
+val SortModes = listOf("По умолчанию" to null, "По рейтингу" to "rating", "Сначала новые" to "year")
+
+/** Каталог с поиском, жанрами, годом выпуска и сортировкой */
+suspend fun loadCatalog(offset: Int, q: String, genres: List<Int>, year: Int?, sortIdx: Int): List<CardData> {
+    val sort = SortModes.getOrNull(sortIdx)?.second
+    val g = genres.takeIf { it.isNotEmpty() }
+    val qq = q.ifBlank { null }
+    // поиск без выбранной сортировки — в порядке релевантности, как отдаёт сайт
+    if (sort == null && qq != null) {
+        return Net.api.animeList(q = qq, genres = g, fromYear = year, toYear = year, limit = 40, offset = offset)
+            .response.orEmpty().map { it.toCard() }
+    }
+    val eff = sort ?: "views"
+    val value: (AnimeCard) -> Double? = when (eff) {
+        "rating" -> ({ a: AnimeCard -> a.rating.ratingValue() })
+        "year" -> ({ a: AnimeCard -> a.year?.toDouble() })
+        else -> ({ a: AnimeCard -> a.views?.toDouble() })
+    }
+    return loadSorted("catalog-$eff", ascending = false, value = value) { fwd ->
+        Net.api.animeList(
+            sort = eff,
+            sortForward = fwd,
+            genres = g,
+            q = qq,
+            fromYear = year,
+            toYear = year,
+            limit = 40,
+            offset = offset
+        ).response.orEmpty()
+    }.map { it.toCard() }
+}
 
 suspend fun loadGenres(): List<Genre> =
     Cache.genres.get("all") ?: Cache.genres.put(
@@ -121,6 +155,8 @@ private object CatalogMemory {
     var submitted by mutableStateOf("")
     var selected by mutableStateOf<Set<Int>>(emptySet())
     var applied by mutableStateOf<Set<Int>>(emptySet())
+    var year by mutableStateOf<Int?>(null)
+    var sortIdx by mutableIntStateOf(0)
 }
 
 @Composable
@@ -306,6 +342,10 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
     var submitted by CatalogMemory::submitted
     var selected by CatalogMemory::selected   // отмечаем в меню
     var applied by CatalogMemory::applied     // применено к каталогу
+    var year by CatalogMemory::year
+    var sortIdx by CatalogMemory::sortIdx
+    var yearSheet by remember { mutableStateOf(false) }
+    var sortSheet by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
     var genreList by remember { mutableStateOf<List<Genre>>(emptyList()) }
     var genreError by remember { mutableStateOf(false) }
@@ -326,6 +366,8 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
         v != null && v in applied
     }.map { it.title.orEmpty() }
     val genreLabel = if (names.isEmpty()) "Жанры" else "Жанры: " + names.joinToString(", ")
+    val yearLabel = if (year == null) "Год" else "Год: $year"
+    val sortLabel = if (sortIdx == 0) "Сортировка" else SortModes[sortIdx].first
 
     Column(Modifier.fillMaxSize()) {
         val openGenres = {
@@ -346,6 +388,14 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
                 TvButton(genreLabel, Modifier.fillMaxWidth(), selected = applied.isNotEmpty(), fill = true) {
                     openGenres()
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton(yearLabel, Modifier.weight(1f), selected = year != null, fill = true) {
+                        yearSheet = true
+                    }
+                    TvButton(sortLabel, Modifier.weight(1f), selected = sortIdx != 0, fill = true) {
+                        sortSheet = true
+                    }
+                }
             }
         } else {
             Row(
@@ -362,15 +412,37 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
                 TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
                     openGenres()
                 }
+                TvButton(yearLabel, selected = year != null) { yearSheet = true }
+                TvButton(sortLabel, selected = sortIdx != 0) { sortSheet = true }
             }
         }
-        PagedGrid(key = submitted to ids, onOpen = onOpen) { offset ->
-            val s = submitted
-            when {
-                ids.isNotEmpty() -> loadFiltered(offset, s, ids)
-                s.isBlank() -> loadCatalogPage(offset)
-                else -> Net.api.animeList(q = s, limit = 40, offset = offset).response.orEmpty().map { it.toCard() }
-            }
+        PagedGrid(key = Triple(submitted, ids, year to sortIdx), onOpen = onOpen) { offset ->
+            loadCatalog(offset, submitted, ids, year, sortIdx)
+        }
+    }
+
+    if (yearSheet) {
+        val cy = Calendar.getInstance().get(Calendar.YEAR)
+        val years = (cy + 1 downTo 1960).toList()
+        SideSheet(
+            title = "Год выпуска",
+            items = listOf(SheetItem("Любой год", selected = year == null)) +
+                years.map { SheetItem(it.toString(), selected = it == year) },
+            onDismiss = { yearSheet = false }
+        ) { i ->
+            year = if (i == 0) null else years[i - 1]
+            yearSheet = false
+        }
+    }
+
+    if (sortSheet) {
+        SideSheet(
+            title = "Сортировка",
+            items = SortModes.mapIndexed { i, m -> SheetItem(m.first, selected = i == sortIdx) },
+            onDismiss = { sortSheet = false }
+        ) { i ->
+            sortIdx = i
+            sortSheet = false
         }
     }
 

@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,19 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val guestFocus = remember { FocusRequester() }
+    val setBackdrop = LocalBackdrop.current
+    // фон — случайный постер из топ-100
+    LaunchedEffect(Unit) {
+        try {
+            val top = Cache.top.get("tv") ?: Cache.top.put("tv", loadTop("tv"))
+            val u = top.mapNotNull { it.hero ?: it.banner }.randomOrNull()
+            if (u != null) setBackdrop(u)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+        }
+    }
+    DisposableEffect(Unit) { onDispose { setBackdrop(null) } }
     // при открытии фокус сразу на «Продолжить без входа»
     LaunchedEffect(Unit) {
         delay(300)

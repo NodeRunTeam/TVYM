@@ -70,6 +70,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.WindowInsets
@@ -130,7 +138,8 @@ data class CardData(
     val added: Long = 0L,
     val description: String? = null,
     val banner: String? = null,
-    val progress: Float? = null
+    val progress: Float? = null,
+    val hero: String? = null
 )
 
 fun AnimeCard.toCard(rank: Int? = null) = CardData(
@@ -143,7 +152,8 @@ fun AnimeCard.toCard(rank: Int? = null) = CardData(
     status = anime_status?.alias,
     added = date ?: 0L,
     description = description?.takeIf { it.isNotBlank() },
-    banner = poster?.big.fixUrl() ?: poster?.medium.fixUrl()
+    banner = poster?.big.fixUrl() ?: poster?.medium.fixUrl(),
+    hero = poster?.fullsize.fixUrl() ?: poster?.huge.fixUrl() ?: poster?.big.fixUrl()
 )
 
 fun ViewingItem.toCard(pos: Int) = CardData(
@@ -442,6 +452,23 @@ fun CardGrid(items: List<CardData>, onOpen: (String) -> Unit) {
 
 data class SheetItem(val text: String, val selected: Boolean = false, val mark: String? = null)
 
+/** Описание открытого бокового меню; рисуется поверх всего приложения (см. SheetOverlayHost) */
+class SheetSpec(
+    val title: String,
+    val items: List<SheetItem>,
+    val onDismiss: () -> Unit,
+    val onPick: (Int) -> Unit
+)
+
+object SheetHost {
+    var spec by mutableStateOf<SheetSpec?>(null)
+    var owner: Any? = null
+}
+
+/**
+ * Боковое меню. Само ничего не рисует на месте вызова — регистрирует себя в SheetHost,
+ * а на весь экран (включая области под строкой состояния и панелью навигации) его рисует SheetOverlayHost.
+ */
 @Composable
 fun SideSheet(
     title: String,
@@ -450,124 +477,107 @@ fun SideSheet(
     hideBars: Boolean = false,
     onPick: (Int) -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    val token = remember { Any() }
+    val spec = SheetSpec(title, items, onDismiss, onPick)
+    SideEffect {
+        SheetHost.owner = token
+        SheetHost.spec = spec
+    }
+    DisposableEffect(token) {
+        onDispose {
+            if (SheetHost.owner === token) {
+                SheetHost.owner = null
+                SheetHost.spec = null
+            }
+        }
+    }
+}
+
+@Composable
+fun SheetOverlayHost() {
+    val spec = SheetHost.spec ?: return
+    androidx.compose.runtime.key(spec.title) { SheetOverlay(spec) }
+}
+
+@Composable
+private fun SheetOverlay(spec: SheetSpec) {
+    BackHandler(onBack = spec.onDismiss)
+    val dismiss by rememberUpdatedState(spec.onDismiss)
+    val pick by rememberUpdatedState(spec.onPick)
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+
+    val cfg = LocalConfiguration.current
+    val landscape = cfg.screenWidthDp > cfg.screenHeightDp
+    val items = spec.items
+    val selIdx = items.indexOfFirst { it.selected }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selIdx - 3).coerceAtLeast(0))
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(300)
+        try {
+            focus.requestFocus()
+        } catch (e: Exception) {
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .pointerInput(Unit) { detectTapGestures { dismiss() } }
+            // пока меню открыто, фокус пульта не должен уходить на экран под ним
+            .onPreviewKeyEvent { e -> e.key == Key.DirectionLeft || e.key == Key.DirectionRight }
     ) {
-        var shown by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { shown = true }
-
-        // Окно меню — на весь экран (в том числе под строкой состояния), без лишнего отступа сверху.
-        // В плеере строка состояния и кнопки навигации не должны появляться при открытии меню.
-        val dialogView = LocalView.current
-        DisposableEffect(hideBars) {
-            val win = (dialogView.parent as? DialogWindowProvider)?.window
-            if (win != null) {
-                WindowCompat.setDecorFitsSystemWindows(win, false)
-                // окно меню должно занимать весь экран, включая область под строкой состояния
-                win.addFlags(
-                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                )
-                win.setLayout(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                if (android.os.Build.VERSION.SDK_INT >= 28) {
-                    win.attributes = win.attributes.also {
-                        it.layoutInDisplayCutoutMode =
-                            android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                    }
-                }
-                win.statusBarColor = android.graphics.Color.TRANSPARENT
-                win.navigationBarColor = android.graphics.Color.TRANSPARENT
-                if (hideBars) {
-                    val c = WindowCompat.getInsetsController(win, dialogView)
-                    c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    c.hide(WindowInsetsCompat.Type.systemBars())
-                }
-            }
-            onDispose {
-                if (hideBars) {
-                    val act = findActivity(dialogView.context)
-                    if (act != null) {
-                        val c = WindowCompat.getInsetsController(act.window, act.window.decorView)
-                        c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        c.hide(WindowInsetsCompat.Type.systemBars())
-                    }
-                }
-            }
-        }
-
-        val cfg = LocalConfiguration.current
-        val landscape = cfg.screenWidthDp > cfg.screenHeightDp
-        val selIdx = items.indexOfFirst { it.selected }.coerceAtLeast(0)
-        val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selIdx - 3).coerceAtLeast(0))
-        val focus = remember { FocusRequester() }
-        LaunchedEffect(Unit) {
-            delay(300)
-            try {
-                focus.requestFocus()
-            } catch (e: Exception) {
-            }
-        }
-
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .pointerInput(Unit) { detectTapGestures { onDismiss() } }
+        AnimatedVisibility(
+            visible = shown,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn()
         ) {
-            AnimatedVisibility(
-                visible = shown,
-                modifier = Modifier.align(Alignment.CenterEnd),
-                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn()
+            Column(
+                Modifier
+                    .then(
+                        if (landscape) Modifier.width(340.dp)
+                        else if (isCompact()) Modifier.fillMaxWidth(0.88f)
+                        else Modifier.width(380.dp)
+                    )
+                    .fillMaxHeight()
+                    .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
-                Column(
-                    Modifier
-                        .then(
-                            if (landscape) Modifier.width(340.dp)
-                            else if (isCompact()) Modifier.fillMaxWidth(0.88f)
-                            else Modifier.width(380.dp)
-                        )
-                        .fillMaxHeight()
-                        .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
-                        .pointerInput(Unit) { detectTapGestures { } }
-                        .windowInsetsPadding(WindowInsets.systemBars)
-                        .padding(horizontal = 20.dp, vertical = 24.dp)
+                Text(spec.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(14.dp))
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(14.dp))
-                    LazyColumn(
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        itemsIndexed(items) { i, item ->
-                            FocusBox(
-                                modifier = (if (i == selIdx) Modifier.focusRequester(focus) else Modifier).fillMaxWidth(),
-                                onClick = { onPick(i) },
-                                shape = RoundedCornerShape(14.dp)
-                            ) { focused ->
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .background(if (item.selected) Accent.copy(alpha = 0.35f) else if (focused) GlassHi else Glass)
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        item.text,
-                                        color = Color.White,
-                                        fontSize = 17.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    item.mark?.let {
-                                        Text(it, color = Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    }
+                    itemsIndexed(items) { i, item ->
+                        FocusBox(
+                            modifier = (if (i == selIdx) Modifier.focusRequester(focus) else Modifier).fillMaxWidth(),
+                            onClick = { pick(i) },
+                            shape = RoundedCornerShape(14.dp)
+                        ) { focused ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(if (item.selected) Accent.copy(alpha = 0.35f) else if (focused) GlassHi else Glass)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    item.text,
+                                    color = Color.White,
+                                    fontSize = 17.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                item.mark?.let {
+                                    Text(it, color = Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

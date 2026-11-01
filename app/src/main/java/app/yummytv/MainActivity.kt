@@ -15,6 +15,12 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +66,11 @@ import retrofit2.HttpException
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // приложение рисуется на весь экран, под строкой состояния и панелью навигации
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         Session.init(applicationContext)
         Watched.init(applicationContext)
         setContent { App() }
@@ -265,10 +276,14 @@ fun App() {
         onDispose { }
     }
 
+    // отступы под системные панели; в плеере они скрыты, и контент идёт на весь экран
+    val barsPad = if (inPlayer) Modifier else Modifier.windowInsetsPadding(WindowInsets.systemBars)
+
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Bg)) {
         CompositionLocalProvider(LocalBackdrop provides setBackdrop) {
         Surface(Modifier.fillMaxSize().appBackground(), color = Color.Transparent) {
             Backdrop(backdrop)
+            Box(Modifier.fillMaxSize().then(barsPad).imePadding()) {
             when {
                 Config.APP_TOKEN.startsWith("PASTE") -> MissingToken()
                 !loggedIn && !guest -> LoginScreen(
@@ -331,6 +346,10 @@ fun App() {
                     }
                 }
             }
+            }
+
+            // боковые меню рисуются поверх всего экрана
+            SheetOverlayHost()
 
             // настройки (шестерёнка справа от «Аккаунт»)
             if (settings) {
