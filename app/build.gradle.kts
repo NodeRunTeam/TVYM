@@ -11,8 +11,8 @@ android {
         applicationId = "app.yummytv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.9"
+        versionCode = 14
+        versionName = "0.9.2"
     }
 
     buildTypes {
