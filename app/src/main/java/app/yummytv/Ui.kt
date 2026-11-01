@@ -479,6 +479,14 @@ fun SideSheet(
 ) {
     val token = remember { Any() }
     val spec = SheetSpec(title, items, onDismiss, onPick)
+    if (!isCompact()) {
+        // Телевизор и планшет: обычное окно-диалог (оно само держит фокус пульта внутри меню)
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) { SheetOverlay(spec, handleBack = false) }
+        return
+    }
     SideEffect {
         SheetHost.owner = token
         SheetHost.spec = spec
@@ -500,8 +508,8 @@ fun SheetOverlayHost() {
 }
 
 @Composable
-private fun SheetOverlay(spec: SheetSpec) {
-    BackHandler(onBack = spec.onDismiss)
+private fun SheetOverlay(spec: SheetSpec, handleBack: Boolean = true) {
+    if (handleBack) BackHandler(onBack = spec.onDismiss)
     val dismiss by rememberUpdatedState(spec.onDismiss)
     val pick by rememberUpdatedState(spec.onPick)
     var shown by remember { mutableStateOf(false) }
@@ -537,9 +545,9 @@ private fun SheetOverlay(spec: SheetSpec) {
             Column(
                 Modifier
                     .then(
-                        if (landscape) Modifier.width(340.dp)
-                        else if (isCompact()) Modifier.fillMaxWidth(0.88f)
-                        else Modifier.width(380.dp)
+                        if (!isCompact()) Modifier.width(380.dp)
+                        else if (landscape) Modifier.width(340.dp)
+                        else Modifier.fillMaxWidth(0.88f)
                     )
                     .fillMaxHeight()
                     .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))

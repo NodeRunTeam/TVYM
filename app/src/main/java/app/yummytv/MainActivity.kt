@@ -67,10 +67,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // приложение рисуется на весь экран, под строкой состояния и панелью навигации
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-        )
+        // (только на телефоне; на телевизоре и планшете всё как раньше)
+        if (!isTvDevice(this) && resources.configuration.smallestScreenWidthDp < 600) {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            )
+        }
         Session.init(applicationContext)
         Watched.init(applicationContext)
         setContent { App() }
@@ -277,13 +280,13 @@ fun App() {
     }
 
     // отступы под системные панели; в плеере они скрыты, и контент идёт на весь экран
-    val barsPad = if (inPlayer) Modifier else Modifier.windowInsetsPadding(WindowInsets.systemBars)
+    val barsPad = if (!compact || inPlayer) Modifier else Modifier.windowInsetsPadding(WindowInsets.systemBars)
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Bg)) {
         CompositionLocalProvider(LocalBackdrop provides setBackdrop) {
         Surface(Modifier.fillMaxSize().appBackground(), color = Color.Transparent) {
             Backdrop(backdrop)
-            Box(Modifier.fillMaxSize().then(barsPad).imePadding()) {
+            Box(Modifier.fillMaxSize().then(barsPad).then(if (compact) Modifier.imePadding() else Modifier)) {
             when {
                 Config.APP_TOKEN.startsWith("PASTE") -> MissingToken()
                 !loggedIn && !guest -> LoginScreen(

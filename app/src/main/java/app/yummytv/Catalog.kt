@@ -398,22 +398,27 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
                 }
             }
         } else {
-            Row(
+            // телевизор: поиск на всю ширину, ниже — кнопки фильтров
+            Column(
                 Modifier.fillMaxWidth().padding(horizontal = hPad(), vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 SearchBox(
                     value = q,
                     onValue = { q = it },
                     onSubmit = { submitted = q.trim() },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth()
                 )
-                TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
-                    openGenres()
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
+                        openGenres()
+                    }
+                    TvButton(yearLabel, selected = year != null) { yearSheet = true }
+                    TvButton(sortLabel, selected = sortIdx != 0) { sortSheet = true }
                 }
-                TvButton(yearLabel, selected = year != null) { yearSheet = true }
-                TvButton(sortLabel, selected = sortIdx != 0) { sortSheet = true }
             }
         }
         PagedGrid(key = Triple(submitted, ids, year to sortIdx), onOpen = onOpen) { offset ->

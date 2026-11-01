@@ -48,7 +48,23 @@ import coil.compose.AsyncImage
 
 /** Телефон: самая короткая сторона экрана меньше 600dp (от ориентации не зависит) */
 @Composable
-fun isCompact(): Boolean = LocalConfiguration.current.smallestScreenWidthDp < 600
+fun isCompact(): Boolean {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val tv = androidx.compose.runtime.remember { isTvDevice(ctx) }
+    return !tv && LocalConfiguration.current.smallestScreenWidthDp < 600
+}
+
+/**
+ * Телевизор или приставка: у них ширина экрана в dp часто меньше 600 (например, 540 при 1080p),
+ * поэтому по размеру их не отличить от телефона — смотрим на тип устройства.
+ */
+fun isTvDevice(ctx: android.content.Context): Boolean {
+    val ui = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+    if (ui?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) return true
+    val pm = ctx.packageManager
+    return pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+        !pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
+}
 
 /** Боковые отступы: на ТВ большие (безопасная зона), на телефоне узкие */
 @Composable
