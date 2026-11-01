@@ -47,6 +47,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 
 // ---------- загрузка ----------
 
@@ -92,6 +96,33 @@ suspend fun loadTop(type: String): List<CardData> {
 
 // ---------- сетка с подгрузкой страниц ----------
 
+/** Запоминает загруженные страницы и позицию прокрутки, чтобы при возврате из аниме список не сбрасывался */
+private class PagedMem {
+    val items = mutableStateListOf<CardData>()
+    var end by mutableStateOf(false)
+    var index = 0
+    var offset = 0
+}
+
+private object PagedMemory {
+    private val map = LinkedHashMap<Any?, PagedMem>()
+
+    fun get(key: Any?): PagedMem {
+        val m = map.remove(key) ?: PagedMem()
+        map[key] = m
+        while (map.size > 6) map.remove(map.keys.first())
+        return m
+    }
+}
+
+/** Что введено в каталоге — хранится вне экрана, чтобы не терялось при заходе в аниме */
+private object CatalogMemory {
+    var q by mutableStateOf("")
+    var submitted by mutableStateOf("")
+    var selected by mutableStateOf<Set<Int>>(emptySet())
+    var applied by mutableStateOf<Set<Int>>(emptySet())
+}
+
 @Composable
 fun PagedGrid(
     key: Any?,
@@ -99,19 +130,28 @@ fun PagedGrid(
     pageSize: Int = 40,
     fetch: suspend (Int) -> List<CardData>
 ) {
-    val items = remember(key) { mutableStateListOf<CardData>() }
+    val mem = remember(key) { PagedMemory.get(key) }
+    val items = mem.items
     var loading by remember(key) { mutableStateOf(false) }
-    var end by remember(key) { mutableStateOf(false) }
     var error by remember(key) { mutableStateOf<String?>(null) }
     var request by remember(key) { mutableIntStateOf(0) }
+    val gridState = remember(mem) { LazyGridState(mem.index, mem.offset) }
+    DisposableEffect(mem, gridState) {
+        onDispose {
+            mem.index = gridState.firstVisibleItemIndex
+            mem.offset = gridState.firstVisibleItemScrollOffset
+        }
+    }
 
     LaunchedEffect(key, request) {
+        // уже загружено (вернулись из аниме) — ничего не грузим заново
+        if (request == 0 && items.isNotEmpty()) return@LaunchedEffect
         loading = true
         error = null
         try {
             val page = fetch(items.size)
             items.addAll(page)
-            if (page.size < pageSize) end = true
+            if (page.size < pageSize) mem.end = true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -144,6 +184,7 @@ fun PagedGrid(
     }
 
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(gridMin()),
         contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -158,7 +199,7 @@ fun PagedGrid(
                 when {
                     loading -> CircularProgressIndicator(color = Accent)
                     error != null -> TvButton("Ошибка — повторить") { request = request + 1 }
-                    !end -> TvButton("Показать ещё") { request = request + 1 }
+                    !mem.end -> TvButton("Показать ещё") { request = request + 1 }
                 }
             }
         }
@@ -180,6 +221,8 @@ private fun SearchBox(
     var restore by remember { mutableStateOf(false) }
     val fieldFocus = remember { FocusRequester() }
     val buttonFocus = remember { FocusRequester() }
+    // при каждом входе в режим ввода курсор ставим в конец текста
+    var tfv by remember(editing) { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
 
     if (editing) {
         LaunchedEffect(Unit) {
@@ -190,8 +233,11 @@ private fun SearchBox(
             }
         }
         OutlinedTextField(
-            value = value,
-            onValueChange = onValue,
+            value = tfv,
+            onValueChange = {
+                tfv = it
+                onValue(it.text)
+            },
             singleLine = true,
             placeholder = { Text("Найти аниме по названию") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextDim) },
@@ -256,10 +302,10 @@ private fun SearchBox(
 
 @Composable
 fun CatalogScreen(onOpen: (String) -> Unit) {
-    var q by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }   // отмечаем в меню
-    var applied by remember { mutableStateOf<Set<Int>>(emptySet()) }    // применено к каталогу
+    var q by CatalogMemory::q
+    var submitted by CatalogMemory::submitted
+    var selected by CatalogMemory::selected   // отмечаем в меню
+    var applied by CatalogMemory::applied     // применено к каталогу
     var sheet by remember { mutableStateOf(false) }
     var genreList by remember { mutableStateOf<List<Genre>>(emptyList()) }
     var genreError by remember { mutableStateOf(false) }

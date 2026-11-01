@@ -134,29 +134,19 @@ private fun DetailContent(
     var myList by remember(a) { mutableStateOf<Int?>(null) }
 
     // Плеер -> озвучка -> серия: каждый следующий список зависит от предыдущего выбора
-    // сколько реально доступных серий у каждого плеера (серии без ссылки не считаем)
-    val playerCounts = remember(videos) {
-        players.associateWith { p ->
-            videos.filter { it.playerName() == p && !it.iframe_url.isNullOrBlank() }
-                .map { it.number ?: it.video_id.toString() }.distinct().size
-        }
-    }
-    // Alloha выбираем только если в ней есть серии; иначе Kodik; иначе плеер с наибольшим числом серий
+    // Плеер по умолчанию — Kodik; если его нет, то Alloha, затем первый из списка
     val player = playerSel?.takeIf { it in players }
-        ?: players.firstOrNull { it.contains("alloha", ignoreCase = true) && (playerCounts[it] ?: 0) > 0 }
-        ?: players.firstOrNull { it.contains("kodik", ignoreCase = true) && (playerCounts[it] ?: 0) > 0 }
-        ?: players.maxByOrNull { playerCounts[it] ?: 0 }
+        ?: players.firstOrNull { it.contains("kodik", ignoreCase = true) }
+        ?: players.firstOrNull { it.contains("alloha", ignoreCase = true) }
+        ?: players.firstOrNull()
     val isKodik = player?.contains("kodik", ignoreCase = true) == true
     val dubs = remember(videos, player) {
         videos.filter { it.playerName() == player }.map { it.dubName() }.distinct()
     }
-    val dubCounts = remember(videos, player) {
-        dubs.associateWith { d ->
-            videos.filter { it.playerName() == player && it.dubName() == d && !it.iframe_url.isNullOrBlank() }
-                .map { it.number ?: it.video_id.toString() }.distinct().size
-        }
-    }
-    val dub = dubSel?.takeIf { it in dubs } ?: dubs.firstOrNull()
+    // Озвучка по умолчанию — AniLibria (если есть), иначе первая
+    val dub = dubSel?.takeIf { it in dubs }
+        ?: dubs.firstOrNull { it.contains("anilibria", true) || it.contains("анилибри", true) || it.contains("aniliberty", true) }
+        ?: dubs.firstOrNull()
     val episodes = remember(videos, player, dub) {
         videos.filter { it.playerName() == player && it.dubName() == dub }.sortedBy { it.sortKey() }
     }
@@ -328,7 +318,7 @@ private fun DetailContent(
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 SelectorButton(
                                     "Плеер",
-                                    if (player != null) "$player (${playerCounts[player] ?: 0})" else "—",
+                                    player ?: "—",
                                     Modifier.weight(1f)
                                 ) {
                                     sheet = Pick.Player
@@ -421,7 +411,7 @@ private fun DetailContent(
     when (sheet) {
         Pick.Player -> SideSheet(
             title = "Плеер",
-            items = players.map { SheetItem("Плеер $it (${playerCounts[it] ?: 0})", selected = it == player) },
+            items = players.map { SheetItem(it, selected = it == player) },
             onDismiss = { sheet = null }
         ) { i ->
             playerSel = players[i]
@@ -430,7 +420,7 @@ private fun DetailContent(
         }
         Pick.Dub -> SideSheet(
             title = "Озвучка",
-            items = dubs.map { SheetItem("$it (${dubCounts[it] ?: 0})", selected = it == dub) },
+            items = dubs.map { SheetItem(it, selected = it == dub) },
             onDismiss = { sheet = null }
         ) { i ->
             dubSel = dubs[i]

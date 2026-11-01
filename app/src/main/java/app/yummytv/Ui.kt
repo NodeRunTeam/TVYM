@@ -77,6 +77,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -462,6 +464,21 @@ fun SideSheet(
             val win = (dialogView.parent as? DialogWindowProvider)?.window
             if (win != null) {
                 WindowCompat.setDecorFitsSystemWindows(win, false)
+                // окно меню должно занимать весь экран, включая область под строкой состояния
+                win.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                )
+                win.setLayout(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    win.attributes = win.attributes.also {
+                        it.layoutInDisplayCutoutMode =
+                            android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+                }
                 win.statusBarColor = android.graphics.Color.TRANSPARENT
                 win.navigationBarColor = android.graphics.Color.TRANSPARENT
                 if (hideBars) {
@@ -482,6 +499,8 @@ fun SideSheet(
             }
         }
 
+        val cfg = LocalConfiguration.current
+        val landscape = cfg.screenWidthDp > cfg.screenHeightDp
         val selIdx = items.indexOfFirst { it.selected }.coerceAtLeast(0)
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selIdx - 3).coerceAtLeast(0))
         val focus = remember { FocusRequester() }
@@ -506,7 +525,11 @@ fun SideSheet(
             ) {
                 Column(
                     Modifier
-                        .then(if (isCompact()) Modifier.fillMaxWidth(0.88f) else Modifier.width(380.dp))
+                        .then(
+                            if (landscape) Modifier.width(340.dp)
+                            else if (isCompact()) Modifier.fillMaxWidth(0.88f)
+                            else Modifier.width(380.dp)
+                        )
                         .fillMaxHeight()
                         .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
                         .pointerInput(Unit) { detectTapGestures { } }
