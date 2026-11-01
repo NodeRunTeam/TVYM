@@ -155,6 +155,21 @@ suspend fun loadSimilar(animeId: Long, exclude: Set<String>): List<CardData> {
     return all.filter { it.url !in exclude }
 }
 
+/** Анонсы: сначала блок announcements из ленты сайта, если пусто — каталог со статусом «анонс» */
+suspend fun loadAnnouncements(): List<CardData> {
+    val fromFeed = try {
+        Net.api.feed().response?.announcements.orEmpty()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        emptyList()
+    }
+    val list = fromFeed.ifEmpty {
+        Net.api.animeList(sort = "views", sortForward = false, status = "announcement", limit = 30).response.orEmpty()
+    }
+    return list.map { it.toCard() }
+}
+
 suspend fun loadWatching(): List<CardData> {
     fun LastWatch.toCard(): CardData {
         val ep = ep_title?.trim().orEmpty()
@@ -239,6 +254,9 @@ fun HomeScreen(
     val (season, retrySeason) = rememberLoad<List<CardData>>(null) {
         Cache.home.get("season") ?: Cache.home.put("season", loadSeason())
     }
+    val (announce, retryAnnounce) = rememberLoad<List<CardData>>(null) {
+        Cache.home.get("announcements") ?: Cache.home.put("announcements", loadAnnouncements())
+    }
     val (recs, retryRecs) = rememberLoad<List<CardData>>(loggedIn) {
         if (loggedIn) loadRecommends() else emptyList()
     }
@@ -256,6 +274,11 @@ fun HomeScreen(
             item { CardRow("Продолжить просмотр", watching, retryWatching, onOpen) }
         }
         item { CardRow(seasonTitle, season, retrySeason, onOpen) }
+        // Анонсы: при ошибке или пустом списке блок скрываем
+        val hideAnnounce = announce is Load.Err || (announce is Load.Ok && announce.v.isEmpty())
+        if (!hideAnnounce) {
+            item { CardRow("Анонсы", announce, retryAnnounce, onOpen) }
+        }
         // Рекомендации — только после входа; при ошибке или пустом списке блок скрываем
         if (loggedIn) {
             val hideRecs = recs is Load.Err || (recs is Load.Ok && recs.v.isEmpty())

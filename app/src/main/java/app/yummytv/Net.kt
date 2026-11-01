@@ -39,6 +39,7 @@ interface YummyApi {
         @Query("to_year") toYear: Int? = null,
         @Query("genres") genres: List<Int>? = null,
         @Query("q") q: String? = null,
+        @Query("status") status: String? = null,
         @Query("limit") limit: Int = 40,
         @Query("offset") offset: Int = 0
     ): ListResp<AnimeCard>
