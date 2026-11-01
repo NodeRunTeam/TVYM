@@ -1,6 +1,11 @@
 package app.yummytv
 
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.delay
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.filled.Menu
@@ -89,7 +94,15 @@ fun findActivity(c: Context): Activity? {
 class PlayerLayout(context: Context, private val customControls: Boolean) : FrameLayout(context) {
     /** Вызывается, когда нужно открыть меню выбора серии */
     var onMenu: (() -> Unit)? = null
+
+    /** Вызывается при касании экрана плеера (чтобы показать кнопки управления) */
+    var onTouched: (() -> Unit)? = null
     private var upLong = false
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) onTouched?.invoke()
+        return super.dispatchTouchEvent(ev)
+    }
 
     private fun matchParent() =
         FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -392,12 +405,22 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
     var showEps by remember { mutableStateOf(false) }
     val watched = Watched.ids
 
+    // кнопки на телефоне показываются по касанию экрана и сами скрываются через несколько секунд
+    var controls by remember { mutableStateOf(true) }
+    var touchTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(controls, touchTick, showEps) {
+        if (controls && !showEps) {
+            delay(3500)
+            controls = false
+        }
+    }
+
     val phone = isCompact()
     LaunchedEffect(req.url) {
         Toast.makeText(
             ctx,
             if (phone) {
-                "Серии — кнопка слева · Назад — выход"
+                "Коснитесь экрана — появятся кнопки: назад, серии, предыдущая и следующая"
             } else if (req.kodik) {
                 "ОК — пауза · ▲ курсор · ▼ +90 сек · Меню или удержание ▲ — список серий · Назад — выход"
             } else {
@@ -409,22 +432,55 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
     BackHandler {
         if (layout?.exitFullscreen() != true) onClose()
     }
+
+    val curIdx = req.episodes.indexOfFirst { it.video_id == currentId }
+
+    fun openEpisode(v: VideoItem) {
+        val link = v.iframe_url.fixUrl()
+        if (link != null && v.video_id != currentId) {
+            currentId = v.video_id
+            Watched.setLastEp(req.animeId, v.number)
+            Watched.add(v.video_id)
+            Cache.noteServerLast(req.animeId, v.number.orEmpty(), System.currentTimeMillis() / 1000, v.video_id)
+            if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
+            layout?.load(link)
+        }
+    }
+
+    // предыдущая/следующая серия — ближайшая, у которой есть ссылка на видео
+    fun step(dir: Int) {
+        if (curIdx < 0) return
+        var i = curIdx + dir
+        while (i in req.episodes.indices) {
+            if (!req.episodes[i].iframe_url.isNullOrBlank()) {
+                openEpisode(req.episodes[i])
+                return
+            }
+            i += dir
+        }
+        Toast.makeText(ctx, if (dir > 0) "Это последняя серия" else "Это первая серия", Toast.LENGTH_SHORT).show()
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { c ->
                 PlayerLayout(c, req.kodik).also {
                     it.onMenu = { showEps = true }
+                    it.onTouched = {
+                        controls = true
+                        touchTick++
+                    }
                     it.load(req.url)
                     layout = it
                 }
             },
             onRelease = { it.destroyWeb() }
         )
-        if (phone) {
+        if (phone && controls) {
             // у пульта есть кнопки, у телефона — свои, полупрозрачные, у левого края
             Column(
-                Modifier.align(Alignment.CenterStart).padding(start = 10.dp).alpha(0.55f),
+                Modifier.align(Alignment.CenterStart).padding(start = 10.dp).alpha(0.65f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 IconTvButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад") {
@@ -432,6 +488,14 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
                 }
                 if (req.episodes.isNotEmpty()) {
                     IconTvButton(Icons.Default.Menu, "Серии") { showEps = true }
+                    IconTvButton(Icons.Default.KeyboardArrowLeft, "Предыдущая серия") {
+                        touchTick++
+                        step(-1)
+                    }
+                    IconTvButton(Icons.Default.KeyboardArrowRight, "Следующая серия") {
+                        touchTick++
+                        step(1)
+                    }
                 }
             }
         }
@@ -447,18 +511,11 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
                     mark = if (it.video_id in watched) "✓ просмотрено" else null
                 )
             },
-            onDismiss = { showEps = false }
+            onDismiss = { showEps = false },
+            hideBars = true
         ) { i ->
             showEps = false
-            val v = req.episodes[i]
-            val link = v.iframe_url.fixUrl()
-            if (link != null && v.video_id != currentId) {
-                currentId = v.video_id
-                Watched.setLastEp(req.animeId, v.number)
-                Watched.add(v.video_id)
-                if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
-                layout?.load(link)
-            }
+            openEpisode(req.episodes[i])
         }
     }
 }

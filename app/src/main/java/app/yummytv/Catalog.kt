@@ -323,7 +323,7 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
             when {
                 ids.isNotEmpty() -> loadFiltered(offset, s, ids)
                 s.isBlank() -> loadCatalogPage(offset)
-                else -> Net.api.search(s, 40, offset).response.orEmpty().map { it.toCard() }
+                else -> Net.api.animeList(q = s, limit = 40, offset = offset).response.orEmpty().map { it.toCard() }
             }
         }
     }

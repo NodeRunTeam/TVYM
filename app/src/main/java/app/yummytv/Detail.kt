@@ -56,11 +56,16 @@ private enum class Pick { Player, Dub, Episode, ListMenu, Order }
 
 private fun VideoItem.playerName(): String = data?.player?.takeIf { it.isNotBlank() } ?: "Плеер"
 private fun VideoItem.dubName(): String = data?.dubbing?.takeIf { it.isNotBlank() } ?: "Озвучка"
+private val EpNumRe = Regex("\\d+(?:\\.\\d+)?")
+
+/** Номер серии из строки вида «5», «5 серия», «Серия 5», «5.5» */
+private fun epKey(s: String?): Double? = s?.let { EpNumRe.find(it)?.value?.toDoubleOrNull() }
+
 private fun sameEp(a: String?, b: String?): Boolean {
     if (a == null || b == null) return false
     if (a.trim() == b.trim()) return true
-    val x = a.trim().toIntOrNull()
-    return x != null && x == b.trim().toIntOrNull()
+    val x = epKey(a)
+    return x != null && x == epKey(b)
 }
 
 private fun VideoItem.sortKey(): Double = index ?: number?.toDoubleOrNull() ?: 0.0
@@ -129,17 +134,27 @@ private fun DetailContent(
     var myList by remember(a) { mutableStateOf<Int?>(null) }
 
     // Плеер -> озвучка -> серия: каждый следующий список зависит от предыдущего выбора
-    val playable = remember(videos) {
-        videos.filter { !it.iframe_url.isNullOrBlank() }.map { it.playerName() }.distinct()
+    // сколько реально доступных серий у каждого плеера (серии без ссылки не считаем)
+    val playerCounts = remember(videos) {
+        players.associateWith { p ->
+            videos.filter { it.playerName() == p && !it.iframe_url.isNullOrBlank() }
+                .map { it.number ?: it.video_id.toString() }.distinct().size
+        }
     }
+    // Alloha выбираем только если в ней есть серии; иначе Kodik; иначе плеер с наибольшим числом серий
     val player = playerSel?.takeIf { it in players }
-        ?: playable.firstOrNull { it.contains("alloha", ignoreCase = true) }
-        ?: playable.firstOrNull { it.contains("kodik", ignoreCase = true) }
-        ?: playable.firstOrNull()
-        ?: players.firstOrNull()
+        ?: players.firstOrNull { it.contains("alloha", ignoreCase = true) && (playerCounts[it] ?: 0) > 0 }
+        ?: players.firstOrNull { it.contains("kodik", ignoreCase = true) && (playerCounts[it] ?: 0) > 0 }
+        ?: players.maxByOrNull { playerCounts[it] ?: 0 }
     val isKodik = player?.contains("kodik", ignoreCase = true) == true
     val dubs = remember(videos, player) {
         videos.filter { it.playerName() == player }.map { it.dubName() }.distinct()
+    }
+    val dubCounts = remember(videos, player) {
+        dubs.associateWith { d ->
+            videos.filter { it.playerName() == player && it.dubName() == d && !it.iframe_url.isNullOrBlank() }
+                .map { it.number ?: it.video_id.toString() }.distinct().size
+        }
     }
     val dub = dubSel?.takeIf { it in dubs } ?: dubs.firstOrNull()
     val episodes = remember(videos, player, dub) {
@@ -152,6 +167,7 @@ private fun DetailContent(
     // Берём более свежее: отметка на этом устройстве или данные сайта («Продолжить просмотр»)
     val localNum = remember(a) { Watched.lastEp(a.anime_id) }
     val localTime = remember(a) { Watched.lastEpTime(a.anime_id) }
+    val serverVer = Cache.serverVersion // подписка: страница обновится, когда придут данные сайта
     val server = Cache.serverLast[a.anime_id]
     val lastNum: String? = when {
         localNum != null && (server == null || localTime >= server.date) -> localNum
@@ -180,11 +196,26 @@ private fun DetailContent(
         }
     }
 
+    // каждый раз при открытии аниме спрашиваем у сайта, на какой серии остановились (в т.ч. на других устройствах)
+    LaunchedEffect(a.anime_id, loggedIn) {
+        if (loggedIn) {
+            try {
+                Net.api.lastWatches().response.orEmpty().forEach { w ->
+                    Cache.noteServerLast(w.anime_id, w.ep_title.orEmpty(), (w.date ?: 0.0).toLong(), w.video_id)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+            }
+        }
+    }
+
     fun play(v: VideoItem) {
         val link = v.iframe_url.fixUrl() ?: return
         epSel = v.number
         Watched.setLastEp(a.anime_id, v.number)
         Watched.add(v.video_id)
+        Cache.noteServerLast(a.anime_id, v.number.orEmpty(), System.currentTimeMillis() / 1000, v.video_id)
         if (loggedIn) appScope.launch { syncWatched(v.video_id, v.duration) }
         onPlay(
             Screen.Player(
@@ -295,7 +326,11 @@ private fun DetailContent(
                             Text("Для этого аниме нет доступных серий", color = TextDim, fontSize = 16.sp)
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                SelectorButton("Плеер", player ?: "—", Modifier.weight(1f)) {
+                                SelectorButton(
+                                    "Плеер",
+                                    if (player != null) "$player (${playerCounts[player] ?: 0})" else "—",
+                                    Modifier.weight(1f)
+                                ) {
                                     sheet = Pick.Player
                                 }
                                 SelectorButton("Озвучка", dub ?: "—", Modifier.weight(1f)) {
@@ -386,7 +421,7 @@ private fun DetailContent(
     when (sheet) {
         Pick.Player -> SideSheet(
             title = "Плеер",
-            items = players.map { SheetItem(it, selected = it == player) },
+            items = players.map { SheetItem("Плеер $it (${playerCounts[it] ?: 0})", selected = it == player) },
             onDismiss = { sheet = null }
         ) { i ->
             playerSel = players[i]
@@ -395,7 +430,7 @@ private fun DetailContent(
         }
         Pick.Dub -> SideSheet(
             title = "Озвучка",
-            items = dubs.map { SheetItem(it, selected = it == dub) },
+            items = dubs.map { SheetItem("$it (${dubCounts[it] ?: 0})", selected = it == dub) },
             onDismiss = { sheet = null }
         ) { i ->
             dubSel = dubs[i]

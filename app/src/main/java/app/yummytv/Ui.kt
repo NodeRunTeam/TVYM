@@ -72,6 +72,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -436,6 +445,7 @@ fun SideSheet(
     title: String,
     items: List<SheetItem>,
     onDismiss: () -> Unit,
+    hideBars: Boolean = false,
     onPick: (Int) -> Unit
 ) {
     Dialog(
@@ -444,6 +454,33 @@ fun SideSheet(
     ) {
         var shown by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { shown = true }
+
+        // Окно меню — на весь экран (в том числе под строкой состояния), без лишнего отступа сверху.
+        // В плеере строка состояния и кнопки навигации не должны появляться при открытии меню.
+        val dialogView = LocalView.current
+        DisposableEffect(hideBars) {
+            val win = (dialogView.parent as? DialogWindowProvider)?.window
+            if (win != null) {
+                WindowCompat.setDecorFitsSystemWindows(win, false)
+                win.statusBarColor = android.graphics.Color.TRANSPARENT
+                win.navigationBarColor = android.graphics.Color.TRANSPARENT
+                if (hideBars) {
+                    val c = WindowCompat.getInsetsController(win, dialogView)
+                    c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    c.hide(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+            onDispose {
+                if (hideBars) {
+                    val act = findActivity(dialogView.context)
+                    if (act != null) {
+                        val c = WindowCompat.getInsetsController(act.window, act.window.decorView)
+                        c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        c.hide(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+            }
+        }
 
         val selIdx = items.indexOfFirst { it.selected }.coerceAtLeast(0)
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selIdx - 3).coerceAtLeast(0))
@@ -473,6 +510,7 @@ fun SideSheet(
                         .fillMaxHeight()
                         .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
                         .pointerInput(Unit) { detectTapGestures { } }
+                        .windowInsetsPadding(WindowInsets.systemBars)
                         .padding(horizontal = 20.dp, vertical = 24.dp)
                 ) {
                     Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)

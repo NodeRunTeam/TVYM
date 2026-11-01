@@ -55,10 +55,16 @@ class ServerLast(val ep: String, val date: Long, val videoId: Long)
 object Cache {
     val serverLast = HashMap<Long, ServerLast>()
 
+    /** Меняется при каждом обновлении serverLast — по нему экран аниме перерисовывается */
+    var serverVersion by androidx.compose.runtime.mutableIntStateOf(0)
+
     fun noteServerLast(animeId: Long, ep: String, date: Long, videoId: Long) {
         if (animeId == 0L || ep.isBlank()) return
         val old = serverLast[animeId]
-        if (old == null || date >= old.date) serverLast[animeId] = ServerLast(ep.trim(), date, videoId)
+        if (old == null || date >= old.date) {
+            serverLast[animeId] = ServerLast(ep.trim(), date, videoId)
+            serverVersion++
+        }
     }
 
     val home = TtlCache<String, List<CardData>>(10 * 60 * 1000L)
