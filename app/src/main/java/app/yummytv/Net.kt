@@ -43,6 +43,13 @@ interface YummyApi {
         @Query("offset") offset: Int = 0
     ): ListResp<AnimeCard>
 
+    @GET("anime/{id}/recommendations")
+    suspend fun recommendations(
+        @Path("id") id: Long,
+        @Query("limit") limit: Int = 24,
+        @Query("from_ai") fromAi: Boolean = true
+    ): ListResp<AnimeCard>
+
     @GET("anime/genres")
     suspend fun genres(): ObjResp<GenresData>
 

@@ -186,7 +186,7 @@ fun <T> LoadView(
             }
         }
         is Load.Err -> Column(
-            Modifier.fillMaxSize().padding(48.dp),
+            Modifier.fillMaxSize().padding(hPad()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -415,8 +415,8 @@ fun CardGrid(items: List<CardData>, onOpen: (String) -> Unit) {
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
+        columns = GridCells.Adaptive(gridMin()),
+        contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize()
@@ -469,7 +469,7 @@ fun SideSheet(
             ) {
                 Column(
                     Modifier
-                        .width(380.dp)
+                        .then(if (isCompact()) Modifier.fillMaxWidth(0.88f) else Modifier.width(380.dp))
                         .fillMaxHeight()
                         .background(Color(0xFF14142B), RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
                         .pointerInput(Unit) { detectTapGestures { } }

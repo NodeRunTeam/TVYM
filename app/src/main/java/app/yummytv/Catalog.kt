@@ -1,5 +1,6 @@
 package app.yummytv
 
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,7 +127,7 @@ fun PagedGrid(
     }
     if (items.isEmpty() && error != null) {
         Column(
-            Modifier.fillMaxSize().padding(48.dp),
+            Modifier.fillMaxSize().padding(hPad()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -143,8 +144,8 @@ fun PagedGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
+        columns = GridCells.Adaptive(gridMin()),
+        contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize()
@@ -281,20 +282,40 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
     val genreLabel = if (names.isEmpty()) "Жанры" else "Жанры: " + names.joinToString(", ")
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SearchBox(
-                value = q,
-                onValue = { q = it },
-                onSubmit = { submitted = q.trim() },
-                modifier = Modifier.weight(1f)
-            )
-            TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
-                selected = applied
-                sheet = true
+        val openGenres = {
+            selected = applied
+            sheet = true
+        }
+        if (isCompact()) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = hPad(), vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SearchBox(
+                    value = q,
+                    onValue = { q = it },
+                    onSubmit = { submitted = q.trim() },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                TvButton(genreLabel, Modifier.fillMaxWidth(), selected = applied.isNotEmpty(), fill = true) {
+                    openGenres()
+                }
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = hPad(), vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SearchBox(
+                    value = q,
+                    onValue = { q = it },
+                    onSubmit = { submitted = q.trim() },
+                    modifier = Modifier.weight(1f)
+                )
+                TvButton(genreLabel, Modifier.widthIn(max = 420.dp), selected = applied.isNotEmpty()) {
+                    openGenres()
+                }
             }
         }
         PagedGrid(key = submitted to ids, onOpen = onOpen) { offset ->
@@ -347,17 +368,32 @@ fun CatalogScreen(onOpen: (String) -> Unit) {
 private val TopTabs = listOf("Сериалы" to "tv", "Фильмы" to "movie", "ONA" to "ona")
 
 @Composable
+private fun TopTabButtons(sel: Int, onSel: (Int) -> Unit) {
+    TopTabs.forEachIndexed { i, tab ->
+        TvButton(tab.first, selected = sel == i) { onSel(i) }
+    }
+}
+
+@Composable
 fun TopScreen(onOpen: (String) -> Unit) {
     var sel by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.padding(horizontal = 48.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SectionTitle("Топ-100 аниме", Modifier.padding(end = 16.dp))
-            TopTabs.forEachIndexed { i, tab ->
-                TvButton(tab.first, selected = sel == i) { sel = i }
+        if (isCompact()) {
+            Column(Modifier.padding(horizontal = hPad(), vertical = 8.dp)) {
+                SectionTitle("Топ-100 аниме")
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopTabButtons(sel) { sel = it }
+                }
+            }
+        } else {
+            Row(
+                Modifier.padding(horizontal = hPad(), vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionTitle("Топ-100 аниме", Modifier.padding(end = 16.dp))
+                TopTabButtons(sel) { sel = it }
             }
         }
         val type = TopTabs[sel].second

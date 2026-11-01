@@ -1,5 +1,16 @@
 package app.yummytv
 
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -80,13 +91,14 @@ private fun TopBar(
     onRandom: () -> Unit,
     onSettings: () -> Unit
 ) {
+    val compact = isCompact()
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = hPad(), vertical = if (compact) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FocusBox(
-            modifier = Modifier.size(48.dp),
+            modifier = Modifier.size(if (compact) 38.dp else 48.dp),
             onClick = { onTab(Tab.Home) },
             shape = RoundedCornerShape(14.dp)
         ) {
@@ -98,15 +110,72 @@ private fun TopBar(
         }
         Text(
             "Yummy TV",
-            style = brandStyle(24),
-            modifier = Modifier.padding(start = 4.dp, end = 20.dp)
+            style = brandStyle(if (compact) 20 else 24),
+            modifier = Modifier.padding(start = 4.dp, end = if (compact) 0.dp else 20.dp)
         )
-        NavPill("Каталог", tab == Tab.Catalog) { onTab(Tab.Catalog) }
-        NavPill("Топ-100", tab == Tab.Top) { onTab(Tab.Top) }
-        NavPill(if (randomBusy) "Ищу…" else "Случайное", false) { onRandom() }
-        Spacer(Modifier.weight(1f))
-        NavPill("Аккаунт", tab == Tab.Account) { onTab(Tab.Account) }
+        if (compact) {
+            // на телефоне разделы вынесены в нижнюю панель
+            Spacer(Modifier.weight(1f))
+            NavPill(if (randomBusy) "Ищу…" else "Случайное", false) { onRandom() }
+        } else {
+            NavPill("Каталог", tab == Tab.Catalog) { onTab(Tab.Catalog) }
+            NavPill("Топ-100", tab == Tab.Top) { onTab(Tab.Top) }
+            NavPill(if (randomBusy) "Ищу…" else "Случайное", false) { onRandom() }
+            Spacer(Modifier.weight(1f))
+            NavPill("Аккаунт", tab == Tab.Account) { onTab(Tab.Account) }
+        }
         if (loggedIn) IconTvButton(Icons.Default.Settings, "Настройки") { onSettings() }
+    }
+}
+
+/** Нижняя панель разделов — только для телефона */
+@Composable
+private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit) {
+    val items = listOf(
+        Triple(Tab.Home, "Главная", Icons.Default.Home),
+        Triple(Tab.Catalog, "Каталог", Icons.Default.Search),
+        Triple(Tab.Top, "Топ-100", Icons.Default.Star),
+        Triple(Tab.Account, "Аккаунт", Icons.Default.Person)
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xF2101024))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.forEach { (t, label, icon) ->
+            val sel = tab == t
+            FocusBox(
+                modifier = Modifier.weight(1f),
+                onClick = { onTab(t) },
+                shape = RoundedCornerShape(14.dp)
+            ) { focused ->
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (sel) Accent.copy(alpha = 0.16f) else if (focused) GlassHi else Color.Transparent
+                        )
+                        .padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = label,
+                        tint = if (sel) Accent else TextDim,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        label,
+                        color = if (sel) Color.White else TextDim,
+                        fontSize = 11.sp,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -175,6 +244,27 @@ fun App() {
         }
     }
 
+    val compact = isCompact()
+    val inPlayer = stack.lastOrNull() is Screen.Player
+    DisposableEffect(compact, inPlayer) {
+        val act = findActivity(ctx)
+        if (act != null && compact) {
+            act.requestedOrientation = if (inPlayer) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            val c = WindowCompat.getInsetsController(act.window, act.window.decorView)
+            if (inPlayer) {
+                c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                c.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                c.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose { }
+    }
+
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Bg)) {
         CompositionLocalProvider(LocalBackdrop provides setBackdrop) {
         Surface(Modifier.fillMaxSize().appBackground(), color = Color.Transparent) {
@@ -191,7 +281,7 @@ fun App() {
                         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) else tab = Tab.Home
                     }
                     // отступы под «безопасную зону» телевизора (по краям экран часто обрезается)
-                    val safe = Modifier.fillMaxSize().padding(top = 20.dp, bottom = 28.dp)
+                    val safe = if (compact) Modifier.fillMaxSize() else Modifier.fillMaxSize().padding(top = 20.dp, bottom = 28.dp)
                     when (top) {
                         is Screen.Detail -> Box(Modifier.fillMaxSize()) {
                             DetailScreen(
@@ -223,8 +313,9 @@ fun App() {
                                 )
                             }
                             val open: (String) -> Unit = { stack.add(Screen.Detail(it)) }
+                            Box(Modifier.weight(1f)) {
                             when (tab) {
-                                Tab.Home -> HomeScreen(open, homeState)
+                                Tab.Home -> HomeScreen(open, homeState, loggedIn)
                                 Tab.Catalog -> CatalogScreen(open)
                                 Tab.Top -> TopScreen(open)
                                 Tab.Account -> AccountScreen(
@@ -234,6 +325,8 @@ fun App() {
                                     onOpen = open
                                 )
                             }
+                            }
+                            if (compact) BottomBar(tab) { tab = it }
                         }
                     }
                 }
@@ -272,7 +365,7 @@ fun App() {
 @Composable
 fun MissingToken() {
     Column(
-        Modifier.fillMaxSize().padding(48.dp),
+        Modifier.fillMaxSize().padding(hPad()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

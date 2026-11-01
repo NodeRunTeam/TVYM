@@ -117,7 +117,7 @@ private fun AnimeRows(items: List<CardData>, onOpen: (String) -> Unit) {
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
@@ -136,7 +136,7 @@ fun AccountScreen(
 ) {
     if (!loggedIn || Session.userId == 0L) {
         Column(
-            Modifier.fillMaxSize().padding(48.dp),
+            Modifier.fillMaxSize().padding(hPad()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -153,7 +153,7 @@ fun AccountScreen(
     Column(Modifier.fillMaxSize()) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = hPad(), vertical = 8.dp)
         ) {
             itemsIndexed(AccountTabs) { i, tab ->
                 TvButton(tab.second, selected = sel == i) { sel = i }

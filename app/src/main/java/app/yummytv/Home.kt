@@ -73,6 +73,7 @@ object Cache {
     fun clearUser() {
         serverLast.clear()
         home.remove("watching")
+        home.remove("recommends")
         lists.clear()
         details.clear()
     }
@@ -130,6 +131,24 @@ suspend fun loadSeason(): List<CardData> {
     return list.map { it.toCard() }
 }
 
+/** Персональные рекомендации сайта (блок recommends в /feed, только для вошедшего пользователя) */
+suspend fun loadRecommends(): List<CardData> =
+    Cache.home.get("recommends") ?: Cache.home.put(
+        "recommends",
+        Net.api.feed().response?.recommends.orEmpty().map { it.toCard() }
+    )
+
+/** Похожие аниме (сначала подборка сайта, если пусто — рекомендации пользователей) */
+suspend fun loadSimilar(animeId: Long, exclude: Set<String>): List<CardData> {
+    val key = "similar-$animeId"
+    val all = Cache.home.get(key) ?: run {
+        val ai = Net.api.recommendations(animeId, 24, true).response.orEmpty()
+        val list = if (ai.isNotEmpty()) ai else Net.api.recommendations(animeId, 24, false).response.orEmpty()
+        Cache.home.put(key, list.map { it.toCard() })
+    }
+    return all.filter { it.url !in exclude }
+}
+
 suspend fun loadWatching(): List<CardData> {
     fun LastWatch.toCard(): CardData {
         val ep = ep_title?.trim().orEmpty()
@@ -172,18 +191,18 @@ suspend fun loadWatching(): List<CardData> {
 // ---------- экран ----------
 
 @Composable
-private fun CardRow(
+fun CardRow(
     title: String,
     state: Load<List<CardData>>,
     retry: () -> Unit,
     onOpen: (String) -> Unit
 ) {
     Column {
-        SectionTitle(title, Modifier.padding(start = 48.dp))
+        SectionTitle(title, Modifier.padding(start = hPad()))
         when (state) {
             is Load.Loading -> SkeletonRow()
             is Load.Err -> Row(
-                Modifier.padding(horizontal = 48.dp, vertical = 12.dp),
+                Modifier.padding(horizontal = hPad(), vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -192,10 +211,10 @@ private fun CardRow(
             }
             is Load.Ok -> LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 20.dp)
+                contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 20.dp)
             ) {
                 items(state.v) { c ->
-                    PosterCard(c, Modifier.width(150.dp)) { onOpen(c.url) }
+                    PosterCard(c, Modifier.width(cardW())) { onOpen(c.url) }
                 }
             }
         }
@@ -203,12 +222,19 @@ private fun CardRow(
 }
 
 @Composable
-fun HomeScreen(onOpen: (String) -> Unit, listState: LazyListState = rememberLazyListState()) {
+fun HomeScreen(
+    onOpen: (String) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    loggedIn: Boolean = false
+) {
     val (watching, retryWatching) = rememberLoad<List<CardData>>(null) {
         Cache.home.get("watching") ?: Cache.home.put("watching", loadWatching())
     }
     val (season, retrySeason) = rememberLoad<List<CardData>>(null) {
         Cache.home.get("season") ?: Cache.home.put("season", loadSeason())
+    }
+    val (recs, retryRecs) = rememberLoad<List<CardData>>(loggedIn) {
+        if (loggedIn) loadRecommends() else emptyList()
     }
     val seasonTitle = "Аниме ${currentSeason().second} сезона"
 
@@ -224,6 +250,13 @@ fun HomeScreen(onOpen: (String) -> Unit, listState: LazyListState = rememberLazy
             item { CardRow("Продолжить просмотр", watching, retryWatching, onOpen) }
         }
         item { CardRow(seasonTitle, season, retrySeason, onOpen) }
+        // Рекомендации — только после входа; при ошибке или пустом списке блок скрываем
+        if (loggedIn) {
+            val hideRecs = recs is Load.Err || (recs is Load.Ok && recs.v.isEmpty())
+            if (!hideRecs) {
+                item { CardRow("Рекомендации для вас", recs, retryRecs, onOpen) }
+            }
+        }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }

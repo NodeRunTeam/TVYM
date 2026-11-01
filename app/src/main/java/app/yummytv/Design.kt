@@ -1,5 +1,7 @@
 package app.yummytv
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -41,6 +43,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+
+// ---------- адаптивность: телефон / планшет / ТВ ----------
+
+/** Телефон: самая короткая сторона экрана меньше 600dp (от ориентации не зависит) */
+@Composable
+fun isCompact(): Boolean = LocalConfiguration.current.smallestScreenWidthDp < 600
+
+/** Боковые отступы: на ТВ большие (безопасная зона), на телефоне узкие */
+@Composable
+fun hPad(): Dp = if (isCompact()) 16.dp else 48.dp
+
+@Composable
+fun cardW(): Dp = if (isCompact()) 120.dp else 150.dp
+
+@Composable
+fun gridMin(): Dp = if (isCompact()) 120.dp else 160.dp
 
 // ---------- палитра ----------
 
@@ -120,18 +138,19 @@ fun SkeletonRow() {
     LazyRow(
         userScrollEnabled = false,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 20.dp)
+        contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 20.dp)
     ) {
-        items(8) { SkeletonCard(Modifier.width(150.dp)) }
+        val w = cardW()
+        items(8) { SkeletonCard(Modifier.width(w)) }
     }
 }
 
 @Composable
 fun SkeletonGrid() {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
+        columns = GridCells.Adaptive(gridMin()),
         userScrollEnabled = false,
-        contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize()

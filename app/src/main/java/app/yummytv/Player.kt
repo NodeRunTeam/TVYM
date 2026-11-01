@@ -1,5 +1,15 @@
 package app.yummytv
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -66,7 +76,7 @@ private class KeyHook(
     }
 }
 
-private fun findActivity(c: Context): Activity? {
+fun findActivity(c: Context): Activity? {
     var cur: Context? = c
     while (cur is ContextWrapper) {
         if (cur is Activity) return cur
@@ -382,10 +392,13 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
     var showEps by remember { mutableStateOf(false) }
     val watched = Watched.ids
 
+    val phone = isCompact()
     LaunchedEffect(req.url) {
         Toast.makeText(
             ctx,
-            if (req.kodik) {
+            if (phone) {
+                "Серии — кнопка слева · Назад — выход"
+            } else if (req.kodik) {
                 "ОК — пауза · ▲ курсор · ▼ +90 сек · Меню или удержание ▲ — список серий · Назад — выход"
             } else {
                 "Меню или удержание ▲ — список серий · Назад — выход"
@@ -396,17 +409,33 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
     BackHandler {
         if (layout?.exitFullscreen() != true) onClose()
     }
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { c ->
-            PlayerLayout(c, req.kodik).also {
-                it.onMenu = { showEps = true }
-                it.load(req.url)
-                layout = it
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { c ->
+                PlayerLayout(c, req.kodik).also {
+                    it.onMenu = { showEps = true }
+                    it.load(req.url)
+                    layout = it
+                }
+            },
+            onRelease = { it.destroyWeb() }
+        )
+        if (phone) {
+            // у пульта есть кнопки, у телефона — свои, полупрозрачные, у левого края
+            Column(
+                Modifier.align(Alignment.CenterStart).padding(start = 10.dp).alpha(0.55f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconTvButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад") {
+                    if (layout?.exitFullscreen() != true) onClose()
+                }
+                if (req.episodes.isNotEmpty()) {
+                    IconTvButton(Icons.Default.Menu, "Серии") { showEps = true }
+                }
             }
-        },
-        onRelease = { it.destroyWeb() }
-    )
+        }
+    }
 
     if (showEps && req.episodes.isNotEmpty()) {
         SideSheet(

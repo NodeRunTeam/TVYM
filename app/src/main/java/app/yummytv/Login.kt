@@ -1,5 +1,6 @@
 package app.yummytv
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
@@ -109,7 +110,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             .fillMaxSize()
             .verticalScroll(scroll)
             .imePadding()
-            .padding(horizontal = 48.dp, vertical = 24.dp),
+            .padding(horizontal = hPad(), vertical = 24.dp),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -128,7 +129,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             colors = tvFieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             modifier = Modifier
-                .width(480.dp)
+                .widthIn(max = 480.dp).fillMaxWidth()
                 .bringIntoViewRequester(loginReq)
                 .onFocusEvent { if (it.isFocused) scope.launch { loginReq.bringIntoView() } }
         )
@@ -144,17 +145,17 @@ fun LoginScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { doLogin() }),
             modifier = Modifier
-                .width(480.dp)
+                .widthIn(max = 480.dp).fillMaxWidth()
                 .bringIntoViewRequester(passReq)
                 .onFocusEvent { if (it.isFocused) scope.launch { passReq.bringIntoView() } }
         )
         Spacer(Modifier.height(16.dp))
         error?.let {
-            Text(it, color = Color(0xFFFF8A8A), fontSize = 15.sp, modifier = Modifier.width(480.dp))
+            Text(it, color = Color(0xFFFF8A8A), fontSize = 15.sp, modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth())
             Spacer(Modifier.height(12.dp))
         }
-        TvButton(if (busy) "Вход…" else "Войти", Modifier.width(480.dp), selected = true, fill = true) { doLogin() }
+        TvButton(if (busy) "Вход…" else "Войти", Modifier.widthIn(max = 480.dp).fillMaxWidth(), selected = true, fill = true) { doLogin() }
         Spacer(Modifier.height(10.dp))
-        TvButton("Продолжить без входа", Modifier.width(480.dp).focusRequester(guestFocus), fill = true) { onGuest() }
+        TvButton("Продолжить без входа", Modifier.widthIn(max = 480.dp).fillMaxWidth().focusRequester(guestFocus), fill = true) { onGuest() }
     }
 }
