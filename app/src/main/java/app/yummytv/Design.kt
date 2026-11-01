@@ -135,12 +135,12 @@ fun SkeletonCard(modifier: Modifier = Modifier) {
 
 @Composable
 fun SkeletonRow() {
+    val w = cardW()
     LazyRow(
         userScrollEnabled = false,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(start = hPad(), end = hPad(), top = 16.dp, bottom = 20.dp)
     ) {
-        val w = cardW()
         items(8) { SkeletonCard(Modifier.width(w)) }
     }
 }
