@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.SideEffect
 import kotlinx.coroutines.delay
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
@@ -97,6 +98,10 @@ class PlayerLayout(context: Context, private val customControls: Boolean) : Fram
 
     /** Вызывается при касании экрана плеера (чтобы показать кнопки управления) */
     var onTouched: (() -> Unit)? = null
+
+    /** Следующая (1) / предыдущая (-1) серия — по кнопкам наушников и пульта */
+    var onStep: ((Int) -> Unit)? = null
+    private var headset: HeadsetControls? = null
     private var upLong = false
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -191,6 +196,15 @@ class PlayerLayout(context: Context, private val customControls: Boolean) : Fram
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        if (headset == null) {
+            headset = HeadsetControls(
+                context,
+                onToggle = { sendKey(KeyEvent.KEYCODE_SPACE) },
+                onStep = { dir -> onStep?.invoke(dir) },
+                onSeek = { dir -> seekBy(dir) }
+            )
+            if (nowTitle.isNotEmpty()) headset?.setNowPlaying(nowTitle, nowSub)
+        }
         val act = findActivity(context) ?: return
         val w = act.window
         val orig = w.callback ?: return
@@ -201,6 +215,8 @@ class PlayerLayout(context: Context, private val customControls: Boolean) : Fram
     }
 
     override fun onDetachedFromWindow() {
+        headset?.release()
+        headset = null
         val w = activityWindow
         val orig = origCallback
         if (w != null && orig != null) w.callback = orig
@@ -283,8 +299,52 @@ class PlayerLayout(context: Context, private val customControls: Boolean) : Fram
         }
     }
 
+    /** Название для экрана блокировки и дисплея наушников/авто */
+    private var nowTitle = ""
+    private var nowSub = ""
+
+    fun setNowPlaying(title: String, subtitle: String) {
+        nowTitle = title
+        nowSub = subtitle
+        headset?.setNowPlaying(title, subtitle)
+    }
+
+    /** Перемотка примерно на 30 секунд (3 нажатия «вправо/влево» по 10 сек) */
+    private fun seekBy(dir: Int) {
+        val code = if (dir > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+        for (i in 0 until 3) postDelayed({ sendKey(code) }, i * 90L)
+    }
+
     fun handleKey(e: KeyEvent): Boolean {
         val down = e.action == KeyEvent.ACTION_DOWN
+        // Медиа-кнопки (наушники, пульты с медиа-клавишами) — одинаково в обоих плеерах
+        val firstDown = down && e.repeatCount == 0
+        when (e.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
+            KeyEvent.KEYCODE_HEADSETHOOK -> {
+                if (firstDown) {
+                    sendKey(KeyEvent.KEYCODE_SPACE)
+                    headset?.flip()
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                if (firstDown) onStep?.invoke(1)
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                if (firstDown) onStep?.invoke(-1)
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                if (firstDown) seekBy(1)
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                if (firstDown) seekBy(-1)
+                return true
+            }
+        }
         // После удержания ▲ отпускание клавиши уходит в окно меню серий — сбрасываем флаг заранее
         if (down && e.keyCode == KeyEvent.KEYCODE_DPAD_UP && e.repeatCount == 0) upLong = false
         // Кнопка «Меню» — список серий (в обоих плеерах)
@@ -459,6 +519,13 @@ fun PlayerScreen(req: Screen.Player, loggedIn: Boolean, onClose: () -> Unit) {
             i += dir
         }
         Toast.makeText(ctx, if (dir > 0) "Это последняя серия" else "Это первая серия", Toast.LENGTH_SHORT).show()
+    }
+
+    // кнопки наушников/пульта «следующая/предыдущая серия»; обновляем при каждой смене серии
+    SideEffect { layout?.onStep = { dir -> step(dir) } }
+    LaunchedEffect(currentId, layout) {
+        val num = req.episodes.firstOrNull { it.video_id == currentId }?.number
+        layout?.setNowPlaying(req.title, if (num != null) "Серия $num" else "")
     }
 
     Box(Modifier.fillMaxSize()) {
